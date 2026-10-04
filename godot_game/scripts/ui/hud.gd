@@ -48,7 +48,7 @@ func _process(_delta: float) -> void:
 		return
 
 	if speed_label:
-		var speed_value := abs(player_ship.current_forward_speed) if "current_forward_speed" in player_ship else 0.0
+		var speed_value: float = absf(float(player_ship.current_forward_speed)) if "current_forward_speed" in player_ship else 0.0
 		speed_label.text = "%.1f kn" % speed_value
 
 	if player_ship.port_cooldown > 0.0:
