@@ -5,9 +5,9 @@ extends Node3D
 @onready var hud: CanvasLayer = $HUD
 @onready var ocean: MeshInstance3D = $OceanPlane
 
-@export var camera_offset: Vector3 = Vector3(0.0, 24.0, 21.0)
-@export var camera_follow_speed: float = 4.8
-@export var camera_look_ahead: float = 5.0
+@export var camera_offset: Vector3 = Vector3(0.0, 31.0, 26.0)
+@export var camera_follow_speed: float = 4.2
+@export var camera_look_ahead: float = 3.5
 @export var enemy_ship_scene: PackedScene = preload("res://scenes/ships/enemy_ship.tscn")
 
 func _ready() -> void:
@@ -27,11 +27,12 @@ func _update_camera(delta: float) -> void:
 	var speed_ratio: float = clampf(velocity.length() / 14.5, 0.0, 1.0)
 	var forward: Vector3 = -player_ship.global_transform.basis.z
 	var look_ahead: Vector3 = forward * camera_look_ahead * speed_ratio
-	var target_pos: Vector3 = player_ship.global_position + camera_offset + look_ahead * 0.35
+	var target_pos: Vector3 = player_ship.global_position + camera_offset + look_ahead * 0.28
 	var smoothing: float = 1.0 - exp(-camera_follow_speed * delta)
 	camera.global_position = camera.global_position.lerp(target_pos, smoothing)
 
-	var look_target: Vector3 = player_ship.global_position + look_ahead
+	# Focus slightly above the deck for balanced framing of hull, deck, and mast
+	var look_target: Vector3 = player_ship.global_position + Vector3(0.0, 1.4, 0.0) + look_ahead * 0.35
 	camera.look_at(look_target, Vector3.UP)
 
 func _update_ocean_anchor() -> void:
