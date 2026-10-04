@@ -1,0 +1,86 @@
+name: Deploy Godot Web Preview
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: godot-web-preview
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Godot 4.3 and export templates
+        run: |
+          GODOT_VERSION="4.3"
+          GODOT_RELEASE="4.3-stable"
+
+          wget -q https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_RELEASE}_linux.x86_64.zip
+          unzip -q Godot_v${GODOT_RELEASE}_linux.x86_64.zip
+          sudo mv Godot_v${GODOT_RELEASE}_linux.x86_64 /usr/local/bin/godot
+          sudo chmod +x /usr/local/bin/godot
+
+          wget -q https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_RELEASE}_export_templates.tpz
+          mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          unzip -q Godot_v${GODOT_RELEASE}_export_templates.tpz
+          mv templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
+
+          godot --version
+
+      - name: Switch preview build to Compatibility renderer
+        working-directory: godot_game
+        run: |
+          sed -i 's/renderer\/rendering_method="mobile"/renderer\/rendering_method="gl_compatibility"/' project.godot
+
+      - name: Import and validate project
+        working-directory: godot_game
+        run: |
+          godot --headless --path . --editor --quit
+
+      - name: Export Web preview
+        working-directory: godot_game
+        run: |
+          mkdir -p build/web
+          godot --headless --path . --export-release "Web Preview" build/web/index.html
+          touch build/web/.nojekyll
+          ls -lah build/web
+
+      - name: Upload Web build backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pirate-Seasonline-Web-Preview
+          path: godot_game/build/web
+          retention-days: 7
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: godot_game/build/web
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
