@@ -1,37 +1,70 @@
-[gd_scene load_steps=5 format=3 uid="uid://b5goldcrate001"]
+[gd_scene load_steps=9 format=3 uid="uid://b5goldcrate001"]
 
 [ext_resource type="Script" path="res://scripts/loot/gold_crate.gd" id="1_loot"]
 
-[sub_resource type="SphereShape3D" id="SphereShape3D_pickup"]
-radius = 1.6
+[sub_resource type="SphereShape3D" id="PickupShape"]
+radius = 1.7
 
-[sub_resource type="BoxMesh" id="BoxMesh_crate"]
-size = Vector3(0.9, 0.65, 0.7)
+[sub_resource type="BoxMesh" id="ChestBaseMesh"]
+size = Vector3(1.05, 0.58, 0.78)
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_goldwood"]
-albedo_color = Color(0.72, 0.48, 0.18, 1)
-metallic = 0.3
-roughness = 0.5
+[sub_resource type="BoxMesh" id="ChestLidMesh"]
+size = Vector3(1.02, 0.28, 0.76)
+
+[sub_resource type="BoxMesh" id="BandMesh"]
+size = Vector3(0.12, 0.92, 0.82)
+
+[sub_resource type="BoxMesh" id="LockMesh"]
+size = Vector3(0.22, 0.28, 0.10)
+
+[sub_resource type="StandardMaterial3D" id="WoodMat"]
+albedo_color = Color(0.43, 0.23, 0.08, 1)
+roughness = 0.72
+
+[sub_resource type="StandardMaterial3D" id="GoldMat"]
+albedo_color = Color(0.94, 0.63, 0.10, 1)
+metallic = 0.55
+roughness = 0.28
 emission_enabled = true
-emission = Color(0.9, 0.7, 0.15, 1)
-emission_energy_multiplier = 0.4
+emission = Color(0.42, 0.22, 0.02, 1)
+emission_energy_multiplier = 0.38
 
 [node name="GoldCrate" type="Area3D"]
 script = ExtResource("1_loot")
 gold_value = 25
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-shape = SubResource("SphereShape3D_pickup")
+shape = SubResource("PickupShape")
 
 [node name="Visuals" type="Node3D" parent="."]
 
-[node name="CrateMesh" type="MeshInstance3D" parent="Visuals"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, 0)
-mesh = SubResource("BoxMesh_crate")
-surface_material_override/0 = SubResource("StandardMaterial3D_goldwood")
+[node name="Base" type="MeshInstance3D" parent="Visuals"]
+position = Vector3(0, 0.30, 0)
+mesh = SubResource("ChestBaseMesh")
+material_override = SubResource("WoodMat")
 
-[node name="OmniLight3D" type="OmniLight3D" parent="Visuals"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
-light_color = Color(1, 0.85, 0.2, 1)
-light_energy = 1.2
-omni_range = 3.5
+[node name="Lid" type="MeshInstance3D" parent="Visuals"]
+position = Vector3(0, 0.72, 0)
+mesh = SubResource("ChestLidMesh")
+material_override = SubResource("WoodMat")
+
+[node name="BandLeft" type="MeshInstance3D" parent="Visuals"]
+position = Vector3(-0.32, 0.47, 0)
+mesh = SubResource("BandMesh")
+material_override = SubResource("GoldMat")
+
+[node name="BandRight" type="MeshInstance3D" parent="Visuals"]
+position = Vector3(0.32, 0.47, 0)
+mesh = SubResource("BandMesh")
+material_override = SubResource("GoldMat")
+
+[node name="Lock" type="MeshInstance3D" parent="Visuals"]
+position = Vector3(0, 0.55, -0.44)
+mesh = SubResource("LockMesh")
+material_override = SubResource("GoldMat")
+
+[node name="Glow" type="OmniLight3D" parent="Visuals"]
+position = Vector3(0, 0.8, 0)
+light_color = Color(1, 0.72, 0.18, 1)
+light_energy = 0.9
+omni_range = 3.2
