@@ -22,6 +22,8 @@ signal ship_destroyed
 @export var max_health: float = 100.0
 @export var reload_time: float = 2.0
 @export var cannon_damage: float = 34.0
+@export var aim_assist_range: float = 42.0
+@export var aim_assist_degrees: float = 24.0
 @export var cannonball_scene: PackedScene = preload("res://scenes/combat/cannonball.tscn")
 
 var health: float = 100.0
@@ -134,16 +136,39 @@ func _fire_broadside(direction: Vector3, marker_parent: Node3D) -> void:
 	if not cannonball_scene:
 		return
 
+	var assisted_direction := _get_aim_assisted_direction(direction)
 	var spawn_points: Array[Node] = marker_parent.get_children() if marker_parent else []
 	if spawn_points.is_empty():
-		_spawn_single_ball(global_position + direction * 1.5 + Vector3.UP * 0.7, direction)
+		_spawn_single_ball(global_position + assisted_direction * 1.5 + Vector3.UP * 0.7, assisted_direction)
 		return
 
 	for marker in spawn_points:
 		if marker is Node3D:
-			var spread_angle := randf_range(-0.045, 0.045)
-			var spread_dir := direction.rotated(Vector3.UP, spread_angle)
+			var spread_angle := randf_range(-0.035, 0.035)
+			var spread_dir := assisted_direction.rotated(Vector3.UP, spread_angle)
 			_spawn_single_ball(marker.global_position, spread_dir)
+
+
+func _get_aim_assisted_direction(base_direction: Vector3) -> Vector3:
+	var flat_base := Vector3(base_direction.x, 0.0, base_direction.z).normalized()
+	var best_direction := flat_base
+	var best_angle := deg_to_rad(aim_assist_degrees)
+
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		if not enemy is Node3D or not is_instance_valid(enemy):
+			continue
+		var to_enemy: Vector3 = enemy.global_position - global_position
+		to_enemy.y = 0.0
+		var distance := to_enemy.length()
+		if distance <= 0.01 or distance > aim_assist_range:
+			continue
+		var candidate := to_enemy / distance
+		var angle := flat_base.angle_to(candidate)
+		if angle < best_angle:
+			best_angle = angle
+			best_direction = candidate
+
+	return best_direction
 
 func _spawn_single_ball(pos: Vector3, dir: Vector3) -> void:
 	var ball := cannonball_scene.instantiate()
