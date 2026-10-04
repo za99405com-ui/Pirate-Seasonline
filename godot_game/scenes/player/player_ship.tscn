@@ -1,42 +1,82 @@
-[gd_scene load_steps=18 format=3 uid="uid://c3playership001"]
+[gd_scene load_steps=38 format=3 uid="uid://c3playership001"]
 
 [ext_resource type="Script" path="res://scripts/player/player_ship.gd" id="1_ship"]
+[ext_resource type="Script" path="res://scripts/ships/ship_mount_slot.gd" id="2_slot"]
 
 [sub_resource type="BoxShape3D" id="HullShape"]
-size = Vector3(2.8, 1.6, 6.0)
+size = Vector3(2.9, 1.8, 6.2)
 
-[sub_resource type="BoxMesh" id="HullMesh"]
-size = Vector3(2.55, 1.05, 5.2)
+[sub_resource type="BoxMesh" id="LowerHullMesh"]
+size = Vector3(2.6, 1.15, 5.4)
 
-[sub_resource type="PrismMesh" id="BowMesh"]
-size = Vector3(2.55, 1.15, 2.0)
+[sub_resource type="PrismMesh" id="BowKeelMesh"]
+size = Vector3(2.6, 1.25, 2.1)
 
 [sub_resource type="BoxMesh" id="DeckMesh"]
-size = Vector3(2.25, 0.18, 4.8)
+size = Vector3(2.35, 0.18, 5.0)
 
-[sub_resource type="BoxMesh" id="CabinMesh"]
-size = Vector3(1.85, 0.85, 1.35)
+[sub_resource type="BoxMesh" id="RudderMesh"]
+size = Vector3(0.12, 1.3, 0.75)
 
 [sub_resource type="CylinderMesh" id="MastMesh"]
 top_radius = 0.09
-bottom_radius = 0.13
-height = 5.8
+bottom_radius = 0.14
+height = 6.2
 radial_segments = 10
 
 [sub_resource type="CylinderMesh" id="BoomMesh"]
 top_radius = 0.06
 bottom_radius = 0.06
-height = 3.4
+height = 3.6
 radial_segments = 8
 
+[sub_resource type="CylinderMesh" id="CrowsNestMesh"]
+top_radius = 0.55
+bottom_radius = 0.42
+height = 0.45
+radial_segments = 10
+
 [sub_resource type="BoxMesh" id="MainSailMesh"]
-size = Vector3(3.25, 2.8, 0.05)
+size = Vector3(3.35, 2.9, 0.06)
 
 [sub_resource type="BoxMesh" id="TopSailMesh"]
-size = Vector3(2.15, 1.35, 0.045)
+size = Vector3(2.25, 1.45, 0.05)
+
+[sub_resource type="PrismMesh" id="JibSailMesh"]
+size = Vector3(2.1, 1.8, 0.05)
+
+[sub_resource type="BoxMesh" id="CabinMesh"]
+size = Vector3(1.95, 0.95, 1.45)
+
+[sub_resource type="CylinderMesh" id="BowspritMesh"]
+top_radius = 0.05
+bottom_radius = 0.08
+height = 3.0
+radial_segments = 8
 
 [sub_resource type="BoxMesh" id="FlagMesh"]
-size = Vector3(1.0, 0.48, 0.04)
+size = Vector3(1.05, 0.52, 0.04)
+
+[sub_resource type="BoxMesh" id="RailingMesh"]
+size = Vector3(0.12, 0.35, 3.4)
+
+[sub_resource type="BoxMesh" id="CrateMesh"]
+size = Vector3(0.55, 0.45, 0.55)
+
+[sub_resource type="CylinderMesh" id="BarrelMesh"]
+top_radius = 0.28
+bottom_radius = 0.32
+height = 0.75
+radial_segments = 10
+
+[sub_resource type="BoxMesh" id="ChestMesh"]
+size = Vector3(0.75, 0.48, 0.52)
+
+[sub_resource type="CylinderMesh" id="LanternMesh"]
+top_radius = 0.14
+bottom_radius = 0.16
+height = 0.35
+radial_segments = 8
 
 [sub_resource type="CylinderMesh" id="CannonMesh"]
 top_radius = 0.12
@@ -44,30 +84,60 @@ bottom_radius = 0.18
 height = 0.85
 radial_segments = 10
 
+[sub_resource type="BoxMesh" id="AnchorMesh"]
+size = Vector3(0.12, 1.2, 0.8)
+
+[sub_resource type="BoxMesh" id="ArmorBandMesh"]
+size = Vector3(2.72, 0.16, 5.5)
+
+[sub_resource type="PrismMesh" id="FigureheadMesh"]
+size = Vector3(0.45, 0.75, 0.65)
+
 [sub_resource type="BoxMesh" id="WakeMesh"]
-size = Vector3(0.55, 0.03, 3.4)
+size = Vector3(0.55, 0.03, 3.5)
 
-[sub_resource type="StandardMaterial3D" id="WoodMat"]
-albedo_color = Color(0.34, 0.16, 0.07, 1)
-roughness = 0.72
+[sub_resource type="StandardMaterial3D" id="DarkWoodMat"]
+albedo_color = Color(0.26, 0.14, 0.07, 1)
+roughness = 0.74
 
-[sub_resource type="StandardMaterial3D" id="DeckMat"]
-albedo_color = Color(0.62, 0.39, 0.18, 1)
+[sub_resource type="StandardMaterial3D" id="DeckWoodMat"]
+albedo_color = Color(0.58, 0.38, 0.18, 1)
 roughness = 0.68
 
 [sub_resource type="StandardMaterial3D" id="SailMat"]
-albedo_color = Color(0.96, 0.91, 0.76, 1)
-roughness = 0.82
+albedo_color = Color(0.96, 0.92, 0.82, 1)
+roughness = 0.84
+
+[sub_resource type="StandardMaterial3D" id="SkullSailMat"]
+albedo_color = Color(0.14, 0.14, 0.16, 1)
+roughness = 0.88
 
 [sub_resource type="StandardMaterial3D" id="AccentMat"]
-albedo_color = Color(0.10, 0.32, 0.52, 1)
-metallic = 0.08
-roughness = 0.5
+albedo_color = Color(0.12, 0.32, 0.55, 1)
+metallic = 0.12
+roughness = 0.52
+
+[sub_resource type="StandardMaterial3D" id="RedFlagMat"]
+albedo_color = Color(0.78, 0.12, 0.12, 1)
+roughness = 0.65
 
 [sub_resource type="StandardMaterial3D" id="MetalMat"]
-albedo_color = Color(0.09, 0.11, 0.14, 1)
+albedo_color = Color(0.10, 0.12, 0.15, 1)
+metallic = 0.72
+roughness = 0.32
+
+[sub_resource type="StandardMaterial3D" id="GoldMat"]
+albedo_color = Color(0.92, 0.72, 0.18, 1)
 metallic = 0.65
-roughness = 0.34
+roughness = 0.28
+emission_enabled = true
+emission = Color(0.35, 0.22, 0.04, 1)
+
+[sub_resource type="StandardMaterial3D" id="LanternMat"]
+albedo_color = Color(1.0, 0.88, 0.42, 1)
+emission_enabled = true
+emission = Color(1.0, 0.65, 0.15, 1)
+emission_energy_multiplier = 1.6
 
 [sub_resource type="StandardMaterial3D" id="WakeMat"]
 albedo_color = Color(0.82, 0.95, 1, 0.45)
@@ -84,90 +154,434 @@ max_health = 100.0
 reload_time = 2.0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-position = Vector3(0, 0.75, 0)
+position = Vector3(0, 0.8, 0)
 shape = SubResource("HullShape")
 
 [node name="Visuals" type="Node3D" parent="."]
 
-[node name="LowerHull" type="MeshInstance3D" parent="Visuals"]
-position = Vector3(0, 0.42, 0.15)
-mesh = SubResource("HullMesh")
-material_override = SubResource("WoodMat")
+[node name="BaseHull" type="Node3D" parent="Visuals"]
 
-[node name="Bow" type="MeshInstance3D" parent="Visuals"]
-position = Vector3(0, 0.44, -3.1)
+[node name="LowerHull" type="MeshInstance3D" parent="Visuals/BaseHull"]
+position = Vector3(0, 0.45, 0.12)
+mesh = SubResource("LowerHullMesh")
+material_override = SubResource("DarkWoodMat")
+
+[node name="Bow" type="MeshInstance3D" parent="Visuals/BaseHull"]
+position = Vector3(0, 0.46, -3.15)
 rotation = Vector3(1.5708, 0, 0)
-mesh = SubResource("BowMesh")
-material_override = SubResource("WoodMat")
+mesh = SubResource("BowKeelMesh")
+material_override = SubResource("DarkWoodMat")
 
-[node name="Deck" type="MeshInstance3D" parent="Visuals"]
-position = Vector3(0, 1.02, 0.05)
+[node name="Deck" type="MeshInstance3D" parent="Visuals/BaseHull"]
+position = Vector3(0, 1.05, 0.05)
 mesh = SubResource("DeckMesh")
-material_override = SubResource("DeckMat")
+material_override = SubResource("DeckWoodMat")
 
-[node name="Cabin" type="MeshInstance3D" parent="Visuals"]
-position = Vector3(0, 1.46, 1.65)
-mesh = SubResource("CabinMesh")
-material_override = SubResource("AccentMat")
+[node name="Rudder" type="MeshInstance3D" parent="Visuals/BaseHull"]
+position = Vector3(0, 0.35, 2.95)
+mesh = SubResource("RudderMesh")
+material_override = SubResource("DarkWoodMat")
 
-[node name="Mast" type="MeshInstance3D" parent="Visuals"]
-position = Vector3(0, 3.65, -0.45)
+[node name="MastMain" type="Node3D" parent="Visuals"]
+
+[node name="MastPole" type="MeshInstance3D" parent="Visuals/MastMain"]
+position = Vector3(0, 3.8, -0.45)
 mesh = SubResource("MastMesh")
-material_override = SubResource("DeckMat")
+material_override = SubResource("DeckWoodMat")
 
-[node name="Boom" type="MeshInstance3D" parent="Visuals"]
-position = Vector3(0, 3.55, -0.45)
+[node name="YardBoom" type="MeshInstance3D" parent="Visuals/MastMain"]
+position = Vector3(0, 3.65, -0.45)
 rotation = Vector3(0, 0, 1.5708)
 mesh = SubResource("BoomMesh")
-material_override = SubResource("DeckMat")
+material_override = SubResource("DeckWoodMat")
 
-[node name="MainSail" type="MeshInstance3D" parent="Visuals"]
-position = Vector3(0, 4.05, -0.52)
+[node name="CrowsNest" type="MeshInstance3D" parent="Visuals/MastMain"]
+position = Vector3(0, 5.8, -0.45)
+mesh = SubResource("CrowsNestMesh")
+material_override = SubResource("DeckWoodMat")
+
+[node name="MainSail" type="MeshInstance3D" parent="Visuals/MastMain"]
+position = Vector3(0, 4.15, -0.52)
 mesh = SubResource("MainSailMesh")
 material_override = SubResource("SailMat")
 
-[node name="TopSail" type="MeshInstance3D" parent="Visuals"]
-position = Vector3(0, 5.85, -0.50)
+[node name="ProgressiveParts" type="Node3D" parent="Visuals"]
+
+[node name="deck_trim" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(0, 1.15, 0.05)
+scale = Vector3(1.02, 0.4, 1.02)
+mesh = SubResource("DeckMesh")
+material_override = SubResource("GoldMat")
+
+[node name="crate_small" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(-0.45, 1.35, -1.8)
+mesh = SubResource("CrateMesh")
+material_override = SubResource("DeckWoodMat")
+
+[node name="barrel_small" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(0.55, 1.45, -1.75)
+mesh = SubResource("BarrelMesh")
+material_override = SubResource("DarkWoodMat")
+
+[node name="bowsprit_spar" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(0, 1.55, -4.2)
+rotation = Vector3(1.35, 0, 0)
+mesh = SubResource("BowspritMesh")
+material_override = SubResource("DeckWoodMat")
+
+[node name="side_railings" type="Node3D" parent="Visuals/ProgressiveParts"]
+visible = false
+
+[node name="RailingLeft" type="MeshInstance3D" parent="Visuals/ProgressiveParts/side_railings"]
+position = Vector3(-1.22, 1.32, 0.2)
+mesh = SubResource("RailingMesh")
+material_override = SubResource("DeckWoodMat")
+
+[node name="RailingRight" type="MeshInstance3D" parent="Visuals/ProgressiveParts/side_railings"]
+position = Vector3(1.22, 1.32, 0.2)
+mesh = SubResource("RailingMesh")
+material_override = SubResource("DeckWoodMat")
+
+[node name="stern_flag" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(0.52, 2.5, 2.6)
+mesh = SubResource("FlagMesh")
+material_override = SubResource("RedFlagMat")
+
+[node name="captain_cabin" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(0, 1.55, 1.75)
+mesh = SubResource("CabinMesh")
+material_override = SubResource("AccentMat")
+
+[node name="cargo_stack_a" type="Node3D" parent="Visuals/ProgressiveParts"]
+visible = false
+
+[node name="CrateA1" type="MeshInstance3D" parent="Visuals/ProgressiveParts/cargo_stack_a"]
+position = Vector3(-0.52, 1.35, 0.4)
+mesh = SubResource("CrateMesh")
+material_override = SubResource("DeckWoodMat")
+
+[node name="CrateA2" type="MeshInstance3D" parent="Visuals/ProgressiveParts/cargo_stack_a"]
+position = Vector3(-0.50, 1.78, 0.42)
+scale = Vector3(0.85, 0.85, 0.85)
+mesh = SubResource("CrateMesh")
+material_override = SubResource("DarkWoodMat")
+
+[node name="top_sail" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(0, 6.25, -0.5)
 mesh = SubResource("TopSailMesh")
 material_override = SubResource("SailMat")
 
-[node name="Flag" type="MeshInstance3D" parent="Visuals"]
-position = Vector3(0.55, 6.65, -0.46)
-mesh = SubResource("FlagMesh")
+[node name="lantern_front" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(0, 1.65, -3.4)
+mesh = SubResource("LanternMesh")
+material_override = SubResource("LanternMat")
+
+[node name="FrontLight" type="OmniLight3D" parent="Visuals/ProgressiveParts/lantern_front"]
+light_color = Color(1, 0.78, 0.32, 1)
+light_energy = 1.2
+omni_range = 5.0
+
+[node name="barrel_pair" type="Node3D" parent="Visuals/ProgressiveParts"]
+visible = false
+
+[node name="Barrel1" type="MeshInstance3D" parent="Visuals/ProgressiveParts/barrel_pair"]
+position = Vector3(0.65, 1.45, 0.25)
+mesh = SubResource("BarrelMesh")
+material_override = SubResource("DarkWoodMat")
+
+[node name="Barrel2" type="MeshInstance3D" parent="Visuals/ProgressiveParts/barrel_pair"]
+position = Vector3(0.65, 1.45, 0.95)
+mesh = SubResource("BarrelMesh")
+material_override = SubResource("DarkWoodMat")
+
+[node name="gear_bench" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(-0.55, 1.32, -0.6)
+mesh = SubResource("CrateMesh")
 material_override = SubResource("AccentMat")
 
-[node name="PortCannonVisual1" type="MeshInstance3D" parent="Visuals"]
-position = Vector3(-1.38, 1.08, -0.9)
-rotation = Vector3(0, 0, 1.5708)
-mesh = SubResource("CannonMesh")
-material_override = SubResource("MetalMat")
+[node name="cannons_pair_2" type="Node3D" parent="Visuals/ProgressiveParts"]
+visible = false
 
-[node name="PortCannonVisual2" type="MeshInstance3D" parent="Visuals"]
+[node name="PortCannon2" type="MeshInstance3D" parent="Visuals/ProgressiveParts/cannons_pair_2"]
 position = Vector3(-1.38, 1.08, 0.85)
 rotation = Vector3(0, 0, 1.5708)
 mesh = SubResource("CannonMesh")
 material_override = SubResource("MetalMat")
 
-[node name="StarboardCannonVisual1" type="MeshInstance3D" parent="Visuals"]
-position = Vector3(1.38, 1.08, -0.9)
-rotation = Vector3(0, 0, 1.5708)
-mesh = SubResource("CannonMesh")
-material_override = SubResource("MetalMat")
-
-[node name="StarboardCannonVisual2" type="MeshInstance3D" parent="Visuals"]
+[node name="StarboardCannon2" type="MeshInstance3D" parent="Visuals/ProgressiveParts/cannons_pair_2"]
 position = Vector3(1.38, 1.08, 0.85)
 rotation = Vector3(0, 0, 1.5708)
 mesh = SubResource("CannonMesh")
 material_override = SubResource("MetalMat")
 
+[node name="reinforced_gunwales" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(0, 1.05, 0)
+scale = Vector3(1.08, 0.25, 0.98)
+mesh = SubResource("LowerHullMesh")
+material_override = SubResource("DarkWoodMat")
+
+[node name="extended_wake" type="Node3D" parent="Visuals/ProgressiveParts"]
+visible = false
+
+[node name="captain_chest" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(0, 2.15, 1.85)
+mesh = SubResource("ChestMesh")
+material_override = SubResource("GoldMat")
+
+[node name="lantern_stern" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(0, 2.35, 2.7)
+mesh = SubResource("LanternMesh")
+material_override = SubResource("LanternMat")
+
+[node name="SternLight" type="OmniLight3D" parent="Visuals/ProgressiveParts/lantern_stern"]
+light_color = Color(1, 0.72, 0.25, 1)
+light_energy = 1.4
+omni_range = 6.0
+
+[node name="wide_quarterdeck" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(0, 1.35, 1.95)
+scale = Vector3(1.04, 1.0, 1.0)
+mesh = SubResource("DeckMesh")
+material_override = SubResource("DeckWoodMat")
+
+[node name="jib_sail" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(0, 2.65, -2.6)
+rotation = Vector3(0, 1.5708, 0.45)
+mesh = SubResource("JibSailMesh")
+material_override = SubResource("SailMat")
+
+[node name="cargo_stack_b" type="Node3D" parent="Visuals/ProgressiveParts"]
+visible = false
+
+[node name="CrateB1" type="MeshInstance3D" parent="Visuals/ProgressiveParts/cargo_stack_b"]
+position = Vector3(0.55, 1.35, -0.65)
+mesh = SubResource("CrateMesh")
+material_override = SubResource("DeckWoodMat")
+
+[node name="CrateB2" type="MeshInstance3D" parent="Visuals/ProgressiveParts/cargo_stack_b"]
+position = Vector3(0.52, 1.8, -0.65)
+scale = Vector3(0.8, 0.8, 0.8)
+mesh = SubResource("CrateMesh")
+material_override = SubResource("DarkWoodMat")
+
+[node name="carved_gunports" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(0, 1.15, 0)
+scale = Vector3(1.12, 0.15, 0.85)
+mesh = SubResource("LowerHullMesh")
+material_override = SubResource("GoldMat")
+
+[node name="side_bulwarks" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(0, 1.3, 0)
+scale = Vector3(1.05, 0.35, 0.95)
+mesh = SubResource("LowerHullMesh")
+material_override = SubResource("DarkWoodMat")
+
+[node name="metal_armor_bands" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(0, 0.48, 0.12)
+mesh = SubResource("ArmorBandMesh")
+material_override = SubResource("MetalMat")
+
+[node name="rigging_coils" type="Node3D" parent="Visuals/ProgressiveParts"]
+visible = false
+
+[node name="CoilLeft" type="MeshInstance3D" parent="Visuals/ProgressiveParts/rigging_coils"]
+position = Vector3(-1.05, 1.25, -0.45)
+scale = Vector3(0.5, 0.5, 0.5)
+mesh = SubResource("BarrelMesh")
+material_override = SubResource("SailMat")
+
+[node name="CoilRight" type="MeshInstance3D" parent="Visuals/ProgressiveParts/rigging_coils"]
+position = Vector3(1.05, 1.25, -0.45)
+scale = Vector3(0.5, 0.5, 0.5)
+mesh = SubResource("BarrelMesh")
+material_override = SubResource("SailMat")
+
+[node name="bow_figurehead" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(0, 1.45, -4.45)
+rotation = Vector3(0, 3.1415, 0)
+mesh = SubResource("FigureheadMesh")
+material_override = SubResource("GoldMat")
+
+[node name="ornate_transom" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(0, 1.6, 2.75)
+scale = Vector3(0.9, 0.7, 0.1)
+mesh = SubResource("DeckMesh")
+material_override = SubResource("GoldMat")
+
+[node name="bow_anchor" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(-1.35, 0.75, -2.85)
+rotation = Vector3(0.35, 0, 0)
+mesh = SubResource("AnchorMesh")
+material_override = SubResource("MetalMat")
+
+[node name="iron_vault" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(0, 1.35, 0.95)
+scale = Vector3(1.1, 1.1, 1.1)
+mesh = SubResource("ChestMesh")
+material_override = SubResource("MetalMat")
+
+[node name="skull_crest_sail" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(0, 4.15, -0.56)
+scale = Vector3(1.01, 1.01, 1.01)
+mesh = SubResource("MainSailMesh")
+material_override = SubResource("SkullSailMat")
+
+[node name="gilded_finishes" type="MeshInstance3D" parent="Visuals/ProgressiveParts"]
+visible = false
+position = Vector3(0, 1.48, 0)
+scale = Vector3(1.03, 0.08, 1.01)
+mesh = SubResource("LowerHullMesh")
+material_override = SubResource("GoldMat")
+
+[node name="cannons_pair_1" type="Node3D" parent="Visuals/ProgressiveParts"]
+
+[node name="PortCannonVisual1" type="MeshInstance3D" parent="Visuals/ProgressiveParts/cannons_pair_1"]
+position = Vector3(-1.38, 1.08, -0.9)
+rotation = Vector3(0, 0, 1.5708)
+mesh = SubResource("CannonMesh")
+material_override = SubResource("MetalMat")
+
+[node name="StarboardCannonVisual1" type="MeshInstance3D" parent="Visuals/ProgressiveParts/cannons_pair_1"]
+position = Vector3(1.38, 1.08, -0.9)
+rotation = Vector3(0, 0, 1.5708)
+mesh = SubResource("CannonMesh")
+material_override = SubResource("MetalMat")
+
+[node name="MountSlots" type="Node3D" parent="Visuals"]
+
+[node name="SlotCannonPort1" type="Node3D" parent="Visuals/MountSlots"]
+position = Vector3(-1.45, 1.08, -0.9)
+script = ExtResource("2_slot")
+slot_id = "slot_cannon_port_1"
+slot_title = "Port Cannon 1"
+
+[node name="SlotCannonPort2" type="Node3D" parent="Visuals/MountSlots"]
+position = Vector3(-1.45, 1.08, 0.85)
+script = ExtResource("2_slot")
+slot_id = "slot_cannon_port_2"
+slot_title = "Port Cannon 2"
+
+[node name="SlotCannonStarboard1" type="Node3D" parent="Visuals/MountSlots"]
+position = Vector3(1.45, 1.08, -0.9)
+script = ExtResource("2_slot")
+slot_id = "slot_cannon_starboard_1"
+slot_type = 0
+slot_title = "Starboard Cannon 1"
+
+[node name="SlotCannonStarboard2" type="Node3D" parent="Visuals/MountSlots"]
+position = Vector3(1.45, 1.08, 0.85)
+script = ExtResource("2_slot")
+slot_id = "slot_cannon_starboard_2"
+slot_type = 0
+slot_title = "Starboard Cannon 2"
+
+[node name="SlotStorageCrate" type="Node3D" parent="Visuals/MountSlots"]
+position = Vector3(-0.45, 1.25, -1.8)
+script = ExtResource("2_slot")
+slot_id = "slot_storage_crate"
+slot_type = 1
+slot_title = "Deck Crate Rack"
+
+[node name="SlotStorageHold" type="Node3D" parent="Visuals/MountSlots"]
+position = Vector3(0, 1.25, 0.4)
+script = ExtResource("2_slot")
+slot_id = "slot_storage_hold"
+slot_type = 1
+slot_title = "Cargo Hold"
+
+[node name="SlotStorageChest" type="Node3D" parent="Visuals/MountSlots"]
+position = Vector3(0, 1.95, 1.85)
+script = ExtResource("2_slot")
+slot_id = "slot_storage_chest"
+slot_type = 1
+slot_title = "Captain's Chest"
+
+[node name="SlotSailMain" type="Node3D" parent="Visuals/MountSlots"]
+position = Vector3(0, 4.15, -0.5)
+script = ExtResource("2_slot")
+slot_id = "slot_sail_main"
+slot_type = 2
+slot_title = "Main Sail Rigging"
+
+[node name="SlotSailTop" type="Node3D" parent="Visuals/MountSlots"]
+position = Vector3(0, 6.25, -0.5)
+script = ExtResource("2_slot")
+slot_id = "slot_sail_top"
+slot_type = 2
+slot_title = "Topsail Rigging"
+
+[node name="SlotSailJib" type="Node3D" parent="Visuals/MountSlots"]
+position = Vector3(0, 2.65, -2.6)
+script = ExtResource("2_slot")
+slot_id = "slot_sail_jib"
+slot_type = 2
+slot_title = "Jib Headsail"
+
+[node name="SlotUtilityGear" type="Node3D" parent="Visuals/MountSlots"]
+position = Vector3(-0.55, 1.25, -0.6)
+script = ExtResource("2_slot")
+slot_id = "slot_utility_gear"
+slot_type = 3
+slot_title = "Utility Bench"
+
+[node name="SlotUtilityLantern" type="Node3D" parent="Visuals/MountSlots"]
+position = Vector3(0, 1.65, -3.4)
+script = ExtResource("2_slot")
+slot_id = "slot_utility_lantern"
+slot_type = 3
+slot_title = "Bow Lantern Mount"
+
+[node name="SlotUtilityAnchor" type="Node3D" parent="Visuals/MountSlots"]
+position = Vector3(-1.35, 0.75, -2.85)
+script = ExtResource("2_slot")
+slot_id = "slot_utility_anchor"
+slot_type = 3
+slot_title = "Anchor Davit"
+
+[node name="SlotCosmeticFlag" type="Node3D" parent="Visuals/MountSlots"]
+position = Vector3(0.52, 2.5, 2.6)
+script = ExtResource("2_slot")
+slot_id = "slot_cosmetic_flag"
+slot_type = 4
+slot_title = "Stern Flagpole"
+
+[node name="SlotCosmeticBow" type="Node3D" parent="Visuals/MountSlots"]
+position = Vector3(0, 1.45, -4.45)
+script = ExtResource("2_slot")
+slot_id = "slot_cosmetic_bow"
+slot_type = 4
+slot_title = "Bow Ornament Socket"
+
 [node name="WakeLeft" type="MeshInstance3D" parent="Visuals"]
-position = Vector3(-0.72, 0.06, 3.75)
+position = Vector3(-0.75, 0.06, 3.85)
 rotation = Vector3(0, 0.18, 0)
 mesh = SubResource("WakeMesh")
 material_override = SubResource("WakeMat")
 
 [node name="WakeRight" type="MeshInstance3D" parent="Visuals"]
-position = Vector3(0.72, 0.06, 3.75)
+position = Vector3(0.75, 0.06, 3.85)
 rotation = Vector3(0, -0.18, 0)
 mesh = SubResource("WakeMesh")
 material_override = SubResource("WakeMat")
@@ -175,15 +589,17 @@ material_override = SubResource("WakeMat")
 [node name="PortCannons" type="Node3D" parent="Visuals"]
 
 [node name="PortMarker1" type="Marker3D" parent="Visuals/PortCannons"]
-position = Vector3(-1.62, 1.05, -0.9)
+position = Vector3(-1.65, 1.05, -0.9)
 
 [node name="PortMarker2" type="Marker3D" parent="Visuals/PortCannons"]
-position = Vector3(-1.62, 1.05, 0.85)
+visible = false
+position = Vector3(-1.65, 1.05, 0.85)
 
 [node name="StarboardCannons" type="Node3D" parent="Visuals"]
 
 [node name="StarboardMarker1" type="Marker3D" parent="Visuals/StarboardCannons"]
-position = Vector3(1.62, 1.05, -0.9)
+position = Vector3(1.65, 1.05, -0.9)
 
 [node name="StarboardMarker2" type="Marker3D" parent="Visuals/StarboardCannons"]
-position = Vector3(1.62, 1.05, 0.85)
+visible = false
+position = Vector3(1.65, 1.05, 0.85)

@@ -2,5 +2,7 @@
   "name": "Pirate Seas Online",
   "description": "Stylized 3D Open World Pirate Multiplayer Game architecture & mobile playable prototype.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

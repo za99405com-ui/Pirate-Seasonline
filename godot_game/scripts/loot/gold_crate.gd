@@ -29,6 +29,8 @@ func _on_body_entered(body: Node) -> void:
 	if body.is_in_group("player"):
 		is_collected = true
 		GameManager.add_gold(gold_value)
+		if "storage" in body and body.storage:
+			body.storage.add_cargo(1)
 		
 		# Collect popup effect
 		var tw = create_tween()

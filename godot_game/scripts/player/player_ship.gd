@@ -2,6 +2,7 @@ extends CharacterBody3D
 
 signal health_changed(current: float, maximum: float)
 signal ship_destroyed
+signal ship_level_upgraded(new_level: int, title: String)
 
 @export_group("Ship Movement")
 @export var max_speed: float = 14.5
@@ -32,9 +33,13 @@ var joystick_input: Vector2 = Vector2.ZERO
 var port_cooldown: float = 0.0
 var starboard_cooldown: float = 0.0
 var wave_time: float = 0.0
-var _last_move_dir: Vector3 = Vector3.FORWARD
+var current_level: int = 1
+
+var storage: ShipStorage = ShipStorage.new()
 
 @onready var visuals: Node3D = $Visuals
+@onready var progressive_parts: Node3D = $Visuals/ProgressiveParts
+@onready var mount_slots: Node3D = $Visuals/MountSlots
 @onready var port_cannons: Node3D = $Visuals/PortCannons
 @onready var starboard_cannons: Node3D = $Visuals/StarboardCannons
 @onready var wake_left: MeshInstance3D = $Visuals/WakeLeft
@@ -42,8 +47,12 @@ var _last_move_dir: Vector3 = Vector3.FORWARD
 
 func _ready() -> void:
 	add_to_group("player")
-	health = max_health
 	GameManager.register_player(self)
+	
+	storage.storage_changed.connect(_on_storage_changed)
+	apply_ship_level(GameManager.current_ship_level)
+	
+	health = max_health
 	GameManager.update_player_health(health, max_health)
 
 func set_joystick_input(vec: Vector2) -> void:
@@ -83,8 +92,6 @@ func _handle_movement(delta: float) -> void:
 
 	velocity = -transform.basis.z * current_forward_speed
 	velocity.y = 0.0
-	if velocity.length_squared() > 0.01:
-		_last_move_dir = velocity.normalized()
 	move_and_slide()
 
 func _handle_wave_bobbing(delta: float) -> void:
@@ -103,7 +110,7 @@ func _handle_wave_bobbing(delta: float) -> void:
 
 func _update_wake(_delta: float) -> void:
 	var speed_ratio := clamp(abs(current_forward_speed) / max_speed, 0.0, 1.0)
-	var wake_scale := lerp(0.35, 1.25, speed_ratio)
+	var wake_scale := lerp(0.35, 1.35, speed_ratio)
 	for wake in [wake_left, wake_right]:
 		if wake:
 			wake.visible = speed_ratio > 0.08
@@ -111,7 +118,7 @@ func _update_wake(_delta: float) -> void:
 			var mat := wake.material_override as StandardMaterial3D
 			if mat:
 				var c := mat.albedo_color
-				c.a = lerp(0.15, 0.62, speed_ratio)
+				c.a = lerp(0.15, 0.65, speed_ratio)
 				mat.albedo_color = c
 
 func _update_cooldowns(delta: float) -> void:
@@ -137,9 +144,15 @@ func _fire_broadside(direction: Vector3, marker_parent: Node3D) -> void:
 		return
 
 	var assisted_direction := _get_aim_assisted_direction(direction)
-	var spawn_points: Array[Node] = marker_parent.get_children() if marker_parent else []
+	var spawn_points: Array[Node] = []
+	
+	if marker_parent:
+		for marker in marker_parent.get_children():
+			if marker is Node3D and marker.visible:
+				spawn_points.append(marker)
+
 	if spawn_points.is_empty():
-		_spawn_single_ball(global_position + assisted_direction * 1.5 + Vector3.UP * 0.7, assisted_direction)
+		_spawn_single_ball(global_position + assisted_direction * 1.6 + Vector3.UP * 0.7, assisted_direction)
 		return
 
 	for marker in spawn_points:
@@ -147,7 +160,6 @@ func _fire_broadside(direction: Vector3, marker_parent: Node3D) -> void:
 			var spread_angle := randf_range(-0.035, 0.035)
 			var spread_dir := assisted_direction.rotated(Vector3.UP, spread_angle)
 			_spawn_single_ball(marker.global_position, spread_dir)
-
 
 func _get_aim_assisted_direction(base_direction: Vector3) -> Vector3:
 	var flat_base := Vector3(base_direction.x, 0.0, base_direction.z).normalized()
@@ -181,8 +193,8 @@ func _spawn_single_ball(pos: Vector3, dir: Vector3) -> void:
 func _spawn_muzzle_flash(pos: Vector3) -> void:
 	var flash := MeshInstance3D.new()
 	var sphere := SphereMesh.new()
-	sphere.radius = 0.28
-	sphere.height = 0.56
+	sphere.radius = 0.32
+	sphere.height = 0.64
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(1.0, 0.72, 0.24, 0.9)
 	mat.emission_enabled = true
@@ -193,7 +205,7 @@ func _spawn_muzzle_flash(pos: Vector3) -> void:
 	get_parent().add_child(flash)
 
 	var tw := flash.create_tween()
-	tw.tween_property(flash, "scale", Vector3(2.2, 2.2, 2.2), 0.16)
+	tw.tween_property(flash, "scale", Vector3(2.4, 2.4, 2.4), 0.16)
 	tw.parallel().tween_property(mat, "albedo_color:a", 0.0, 0.18)
 	tw.tween_callback(flash.queue_free)
 
@@ -226,3 +238,62 @@ func _destroy_ship() -> void:
 	GameManager.update_player_health(health, max_health)
 	visible = true
 	set_physics_process(true)
+
+# ==========================================
+# LEVEL PROGRESSION & VISUAL CUSTOMIZATION
+# ==========================================
+
+func apply_ship_level(lvl: int) -> void:
+	current_level = clamp(lvl, 1, 15)
+	var info := ShipProgressionData.get_level_info(current_level)
+
+	# 1. Update functional stats
+	var prev_max_hp := max_health
+	max_health = info.max_health
+	if prev_max_hp > 0.0:
+		health = clamp(health + (max_health - prev_max_hp), 1.0, max_health)
+	else:
+		health = max_health
+
+	max_speed = info.max_speed
+	turn_speed = info.turn_speed
+	acceleration = info.acceleration
+	cannon_damage = info.cannon_damage
+	reload_time = info.reload_time
+
+	# 2. Configure storage capacity
+	storage.configure_for_level(current_level, info.storage_capacity)
+	GameManager.update_storage(storage.used_storage, storage.storage_capacity)
+	GameManager.update_player_health(health, max_health)
+
+	# 3. Update progressive visual parts
+	if progressive_parts:
+		for child in progressive_parts.get_children():
+			var feature_id := child.name.to_snake_case()
+			child.visible = info.visible_parts.has(feature_id) or info.visible_parts.has(child.name)
+
+	# 4. Update mount slots
+	if mount_slots:
+		for slot in mount_slots.get_children():
+			if slot is ShipMountSlot:
+				var is_slot_open := info.unlocked_slots.has(slot.slot_id) or info.unlocked_slots.has(slot.name.to_snake_case())
+				slot.set_unlocked(is_slot_open)
+
+	# 5. Enable dual cannon firing markers at Level 8+
+	if port_cannons and port_cannons.has_node("PortMarker2"):
+		port_cannons.get_node("PortMarker2").visible = (current_level >= 8)
+	if starboard_cannons and starboard_cannons.has_node("StarboardMarker2"):
+		starboard_cannons.get_node("StarboardMarker2").visible = (current_level >= 8)
+
+	ship_level_upgraded.emit(current_level, info.title)
+	_play_upgrade_celebration()
+
+func _play_upgrade_celebration() -> void:
+	if not visuals:
+		return
+	var tw := visuals.create_tween()
+	tw.tween_property(visuals, "scale", Vector3(1.15, 1.15, 1.15), 0.18)
+	tw.tween_property(visuals, "scale", Vector3.ONE, 0.22)
+
+func _on_storage_changed(used: int, capacity: int) -> void:
+	GameManager.update_storage(used, capacity)
