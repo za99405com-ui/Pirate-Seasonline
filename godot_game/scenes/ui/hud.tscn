@@ -1,52 +1,119 @@
-[gd_scene load_steps=5 format=3 uid="uid://c8hudlayer001"]
+[gd_scene load_steps=10 format=3 uid="uid://c8hudlayer001"]
 
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="1_hud"]
 [ext_resource type="PackedScene" uid="uid://bvk7joystick01" path="res://scenes/ui/virtual_joystick.tscn" id="2_joy"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_top"]
-bg_color = Color(0.04, 0.1, 0.18, 0.75)
+[sub_resource type="StyleBoxFlat" id="TopPanel"]
+bg_color = Color(0.025, 0.07, 0.12, 0.84)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.82, 0.61, 0.22, 0.58)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+
+[sub_resource type="StyleBoxFlat" id="HPBackground"]
+bg_color = Color(0.08, 0.12, 0.15, 0.95)
+corner_radius_top_left = 7
+corner_radius_top_right = 7
+corner_radius_bottom_right = 7
+corner_radius_bottom_left = 7
+
+[sub_resource type="StyleBoxFlat" id="HPFill"]
+bg_color = Color(0.20, 0.78, 0.35, 1)
+corner_radius_top_left = 7
+corner_radius_top_right = 7
+corner_radius_bottom_right = 7
+corner_radius_bottom_left = 7
+
+[sub_resource type="StyleBoxFlat" id="FireNormal"]
+bg_color = Color(0.055, 0.12, 0.18, 0.90)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.93, 0.66, 0.20, 0.95)
+corner_radius_top_left = 24
+corner_radius_top_right = 24
+corner_radius_bottom_right = 24
+corner_radius_bottom_left = 24
+
+[sub_resource type="StyleBoxFlat" id="FirePressed"]
+bg_color = Color(0.20, 0.12, 0.055, 0.96)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(1.0, 0.82, 0.32, 1)
+corner_radius_top_left = 24
+corner_radius_top_right = 24
+corner_radius_bottom_right = 24
+corner_radius_bottom_left = 24
+
+[sub_resource type="StyleBoxFlat" id="FireDisabled"]
+bg_color = Color(0.05, 0.07, 0.08, 0.68)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.48, 0.48, 0.46, 0.5)
+corner_radius_top_left = 24
+corner_radius_top_right = 24
+corner_radius_bottom_right = 24
+corner_radius_bottom_left = 24
+
+[sub_resource type="StyleBoxFlat" id="SpeedPanel"]
+bg_color = Color(0.025, 0.07, 0.12, 0.76)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.65, 0.82, 0.90, 0.28)
 corner_radius_top_left = 12
 corner_radius_top_right = 12
 corner_radius_bottom_right = 12
 corner_radius_bottom_left = 12
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hp"]
-bg_color = Color(0.18, 0.75, 0.28, 1)
-corner_radius_top_left = 6
-corner_radius_top_right = 6
-corner_radius_bottom_right = 6
-corner_radius_bottom_left = 6
-
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1_hud")
 
 [node name="TopBar" type="Panel" parent="."]
-anchors_preset = 5
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -260.0
-offset_top = 16.0
-offset_right = 260.0
-offset_bottom = 68.0
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 20.0
+offset_top = 14.0
+offset_right = -20.0
+offset_bottom = 72.0
 grow_horizontal = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_top")
+theme_override_styles/panel = SubResource("TopPanel")
 
 [node name="GoldContainer" type="HBoxContainer" parent="TopBar"]
 layout_mode = 1
 anchors_preset = 4
 anchor_top = 0.5
 anchor_bottom = 0.5
-offset_left = 20.0
-offset_top = -16.0
-offset_right = 180.0
-offset_bottom = 16.0
+offset_left = 18.0
+offset_top = -18.0
+offset_right = 215.0
+offset_bottom = 18.0
 grow_vertical = 2
+theme_override_constants/separation = 8
+
+[node name="GoldTitle" type="Label" parent="TopBar/GoldContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.78, 0.84, 0.88, 0.82)
+theme_override_font_sizes/font_size = 13
+text = "GOLD"
+vertical_alignment = 1
 
 [node name="GoldLabel" type="Label" parent="TopBar/GoldContainer"]
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
-theme_override_font_sizes/font_size = 20
-text = "Gold: 0"
+theme_override_colors/font_color = Color(1, 0.78, 0.24, 1)
+theme_override_font_sizes/font_size = 22
+text = "0"
 vertical_alignment = 1
 
 [node name="HPContainer" type="HBoxContainer" parent="TopBar"]
@@ -56,27 +123,64 @@ anchor_left = 1.0
 anchor_top = 0.5
 anchor_right = 1.0
 anchor_bottom = 0.5
-offset_left = -280.0
-offset_top = -16.0
-offset_right = -16.0
-offset_bottom = 16.0
+offset_left = -400.0
+offset_top = -17.0
+offset_right = -18.0
+offset_bottom = 17.0
 grow_horizontal = 0
 grow_vertical = 2
+theme_override_constants/separation = 10
+
+[node name="HullTitle" type="Label" parent="TopBar/HPContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.78, 0.84, 0.88, 0.82)
+theme_override_font_sizes/font_size = 13
+text = "HULL"
+vertical_alignment = 1
 
 [node name="HPBar" type="ProgressBar" parent="TopBar/HPContainer"]
-custom_minimum_size = Vector2(160, 18)
+custom_minimum_size = Vector2(180, 18)
 layout_mode = 2
 size_flags_vertical = 4
-theme_override_styles/fill = SubResource("StyleBoxFlat_hp")
+theme_override_styles/background = SubResource("HPBackground")
+theme_override_styles/fill = SubResource("HPFill")
 max_value = 100.0
 value = 100.0
 show_percentage = false
 
 [node name="HPLabel" type="Label" parent="TopBar/HPContainer"]
+custom_minimum_size = Vector2(90, 0)
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 1, 1, 0.9)
+theme_override_colors/font_color = Color(0.95, 0.97, 1, 0.92)
 theme_override_font_sizes/font_size = 14
-text = "HP: 100 / 100"
+text = "100 / 100"
+vertical_alignment = 1
+
+[node name="SpeedPanel" type="Panel" parent="."]
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -70.0
+offset_top = -64.0
+offset_right = 70.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_styles/panel = SubResource("SpeedPanel")
+
+[node name="SpeedLabel" type="Label" parent="SpeedPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.88, 0.95, 1, 0.95)
+theme_override_font_sizes/font_size = 17
+text = "0.0 kn"
+horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="Controls" type="Control" parent="."]
@@ -93,42 +197,52 @@ layout_mode = 1
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_left = 32.0
-offset_top = -192.0
-offset_right = 192.0
-offset_bottom = -32.0
+offset_left = 26.0
+offset_top = -198.0
+offset_right = 198.0
+offset_bottom = -26.0
 grow_vertical = 0
 
 [node name="VirtualJoystick" parent="Controls/LeftControls" instance=ExtResource("2_joy")]
 layout_mode = 1
 
-[node name="RightControls" type="VBoxContainer" parent="Controls"]
+[node name="RightControls" type="HBoxContainer" parent="Controls"]
 layout_mode = 1
 anchors_preset = 3
 anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -150.0
-offset_top = -210.0
-offset_right = -34.0
-offset_bottom = -30.0
+offset_left = -250.0
+offset_top = -132.0
+offset_right = -24.0
+offset_bottom = -26.0
 grow_horizontal = 0
 grow_vertical = 0
-theme_override_constants/separation = 16
+theme_override_constants/separation = 14
 
 [node name="FireLeftButton" type="Button" parent="Controls/RightControls"]
-custom_minimum_size = Vector2(110, 75)
+custom_minimum_size = Vector2(106, 96)
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 17
-text = "FIRE
-LEFT"
+theme_override_colors/font_color = Color(1, 0.92, 0.72, 1)
+theme_override_colors/font_disabled_color = Color(0.65, 0.68, 0.70, 0.75)
+theme_override_font_sizes/font_size = 16
+theme_override_styles/normal = SubResource("FireNormal")
+theme_override_styles/hover = SubResource("FireNormal")
+theme_override_styles/pressed = SubResource("FirePressed")
+theme_override_styles/disabled = SubResource("FireDisabled")
+text = "PORT
+FIRE"
 
 [node name="FireRightButton" type="Button" parent="Controls/RightControls"]
-custom_minimum_size = Vector2(110, 75)
+custom_minimum_size = Vector2(106, 96)
 layout_mode = 2
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 17
-text = "FIRE
-RIGHT"
+theme_override_colors/font_color = Color(1, 0.92, 0.72, 1)
+theme_override_colors/font_disabled_color = Color(0.65, 0.68, 0.70, 0.75)
+theme_override_font_sizes/font_size = 16
+theme_override_styles/normal = SubResource("FireNormal")
+theme_override_styles/hover = SubResource("FireNormal")
+theme_override_styles/pressed = SubResource("FirePressed")
+theme_override_styles/disabled = SubResource("FireDisabled")
+text = "STARBOARD
+FIRE"
