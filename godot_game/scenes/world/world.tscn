@@ -1,105 +1,250 @@
-[gd_scene load_steps=15 format=3 uid="uid://c6worldmain001"]
+[gd_scene load_steps=24 format=3 uid="uid://c6worldmain001"]
 
 [ext_resource type="Script" path="res://scripts/world/world.gd" id="1_world"]
 [ext_resource type="PackedScene" uid="uid://c3playership001" path="res://scenes/player/player_ship.tscn" id="2_player"]
 [ext_resource type="PackedScene" uid="uid://dg7enemyship001" path="res://scenes/ships/enemy_ship.tscn" id="3_enemy"]
 [ext_resource type="PackedScene" uid="uid://c8hudlayer001" path="res://scenes/ui/hud.tscn" id="4_hud"]
 
-[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sky"]
-sky_top_color = Color(0.24, 0.52, 0.88, 1)
-sky_horizon_color = Color(0.68, 0.82, 0.94, 1)
-ground_bottom_color = Color(0.08, 0.22, 0.42, 1)
-ground_horizon_color = Color(0.68, 0.82, 0.94, 1)
+[sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
+sky_top_color = Color(0.12, 0.34, 0.66, 1)
+sky_horizon_color = Color(0.76, 0.88, 0.96, 1)
+ground_bottom_color = Color(0.06, 0.16, 0.28, 1)
+ground_horizon_color = Color(0.55, 0.76, 0.88, 1)
+sun_angle_max = 18.0
+sun_curve = 0.08
 
-[sub_resource type="Sky" id="Sky_env"]
-sky_material = SubResource("ProceduralSkyMaterial_sky")
+[sub_resource type="Sky" id="Sky"]
+sky_material = SubResource("SkyMat")
 
-[sub_resource type="Environment" id="Environment_ocean"]
+[sub_resource type="Environment" id="Env"]
 background_mode = 2
-sky = SubResource("Sky_env")
+sky = SubResource("Sky")
 ambient_light_source = 3
-ambient_light_color = Color(0.6, 0.75, 0.9, 1)
+ambient_light_color = Color(0.62, 0.76, 0.9, 1)
+ambient_light_energy = 0.82
+reflected_light_source = 2
 tonemap_mode = 2
 fog_enabled = true
-fog_light_color = Color(0.65, 0.8, 0.95, 1)
-fog_density = 0.005
+fog_light_color = Color(0.65, 0.82, 0.92, 1)
+fog_density = 0.0035
+fog_sky_affect = 0.42
 
-[sub_resource type="PlaneMesh" id="PlaneMesh_ocean"]
-size = Vector2(500, 500)
+[sub_resource type="Shader" id="OceanShader"]
+code = "shader_type spatial;
+render_mode cull_disabled;
+uniform vec3 deep_color = vec3(0.025, 0.18, 0.35);
+uniform vec3 shallow_color = vec3(0.02, 0.48, 0.66);
+varying float wave_mix;
+void vertex(){
+ float w1 = sin(VERTEX.x * 0.085 + TIME * 1.25) * 0.20;
+ float w2 = cos(VERTEX.z * 0.11 - TIME * 0.95) * 0.13;
+ float w3 = sin((VERTEX.x + VERTEX.z) * 0.055 + TIME * 0.7) * 0.08;
+ float wave = w1 + w2 + w3;
+ VERTEX.y += wave;
+ wave_mix = wave;
+}
+void fragment(){
+ float fresnel = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.0);
+ float t = clamp(wave_mix * 1.5 + 0.5, 0.0, 1.0);
+ ALBEDO = mix(deep_color, shallow_color, t) + vec3(fresnel * 0.12);
+ ROUGHNESS = 0.16;
+ METALLIC = 0.05;
+ SPECULAR = 0.75;
+}"
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_water"]
-albedo_color = Color(0.06, 0.28, 0.52, 0.92)
-metallic = 0.1
-roughness = 0.15
-transparency = 1
+[sub_resource type="ShaderMaterial" id="OceanMaterial"]
+shader = SubResource("OceanShader")
 
-[sub_resource type="CylinderMesh" id="CylinderMesh_island_sand"]
+[sub_resource type="PlaneMesh" id="OceanMesh"]
+size = Vector2(520, 520)
+subdivide_width = 72
+subdivide_depth = 72
+
+[sub_resource type="CylinderMesh" id="IslandSand"]
 top_radius = 18.0
 bottom_radius = 24.0
 height = 2.0
+radial_segments = 20
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_sand"]
-albedo_color = Color(0.88, 0.78, 0.48, 1)
-roughness = 0.9
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_island_grass"]
+[sub_resource type="CylinderMesh" id="IslandGrass"]
 top_radius = 13.0
 bottom_radius = 16.0
 height = 3.0
+radial_segments = 18
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_grass"]
-albedo_color = Color(0.2, 0.55, 0.22, 1)
-roughness = 0.8
+[sub_resource type="CylinderMesh" id="FoamDisc"]
+top_radius = 24.5
+bottom_radius = 24.5
+height = 0.05
+radial_segments = 28
 
-[sub_resource type="CylinderShape3D" id="CylinderShape3D_island"]
+[sub_resource type="CylinderMesh" id="TrunkMesh"]
+top_radius = 0.18
+bottom_radius = 0.26
+height = 4.0
+radial_segments = 8
+
+[sub_resource type="SphereMesh" id="PalmTopMesh"]
+radius = 1.35
+height = 0.85
+radial_segments = 8
+rings = 4
+
+[sub_resource type="SphereMesh" id="RockMesh"]
+radius = 1.5
+height = 2.2
+radial_segments = 8
+rings = 4
+
+[sub_resource type="CylinderMesh" id="SmallIsland"]
+top_radius = 6.5
+bottom_radius = 9.5
+height = 1.5
+radial_segments = 14
+
+[sub_resource type="CylinderShape3D" id="IslandShape"]
 height = 5.0
 radius = 20.0
 
+[sub_resource type="StandardMaterial3D" id="SandMat"]
+albedo_color = Color(0.87, 0.70, 0.38, 1)
+roughness = 0.92
+
+[sub_resource type="StandardMaterial3D" id="GrassMat"]
+albedo_color = Color(0.16, 0.45, 0.18, 1)
+roughness = 0.86
+
+[sub_resource type="StandardMaterial3D" id="FoamMat"]
+albedo_color = Color(0.66, 0.96, 1.0, 0.42)
+transparency = 1
+shading_mode = 0
+
+[sub_resource type="StandardMaterial3D" id="TrunkMat"]
+albedo_color = Color(0.38, 0.22, 0.10, 1)
+roughness = 0.84
+
+[sub_resource type="StandardMaterial3D" id="LeafMat"]
+albedo_color = Color(0.08, 0.34, 0.13, 1)
+roughness = 0.82
+
+[sub_resource type="StandardMaterial3D" id="RockMat"]
+albedo_color = Color(0.28, 0.30, 0.30, 1)
+roughness = 0.95
+
 [node name="World" type="Node3D"]
 script = ExtResource("1_world")
-camera_offset = Vector3(0, 18, 15)
-camera_follow_speed = 4.5
+camera_offset = Vector3(0, 21, 18)
+camera_follow_speed = 4.8
+camera_look_ahead = 4.0
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
-environment = SubResource("Environment_ocean")
+environment = SubResource("Env")
 
 [node name="SunLight" type="DirectionalLight3D" parent="."]
-transform = Transform3D(0.866, -0.354, 0.354, 0, 0.707, 0.707, -0.5, -0.612, 0.612, 0, 30, 0)
-light_color = Color(1, 0.96, 0.88, 1)
-light_energy = 1.2
+rotation = Vector3(-0.82, -0.58, 0)
+light_color = Color(1, 0.93, 0.78, 1)
+light_energy = 1.25
 shadow_enabled = true
-directional_shadow_max_distance = 60.0
+directional_shadow_max_distance = 58.0
 
 [node name="OceanPlane" type="MeshInstance3D" parent="."]
-mesh = SubResource("PlaneMesh_ocean")
-surface_material_override/0 = SubResource("StandardMaterial3D_water")
+position = Vector3(0, -0.12, 0)
+mesh = SubResource("OceanMesh")
+material_override = SubResource("OceanMaterial")
 
 [node name="Island" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 35, 0, -25)
+position = Vector3(35, 0, -25)
 
-[node name="SandMesh" type="MeshInstance3D" parent="Island"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
-mesh = SubResource("CylinderMesh_island_sand")
-surface_material_override/0 = SubResource("StandardMaterial3D_sand")
+[node name="Foam" type="MeshInstance3D" parent="Island"]
+position = Vector3(0, 0.04, 0)
+mesh = SubResource("FoamDisc")
+material_override = SubResource("FoamMat")
 
-[node name="GrassMesh" type="MeshInstance3D" parent="Island"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, 0)
-mesh = SubResource("CylinderMesh_island_grass")
-surface_material_override/0 = SubResource("StandardMaterial3D_grass")
+[node name="Sand" type="MeshInstance3D" parent="Island"]
+position = Vector3(0, 0.82, 0)
+mesh = SubResource("IslandSand")
+material_override = SubResource("SandMat")
+
+[node name="Grass" type="MeshInstance3D" parent="Island"]
+position = Vector3(0, 2.2, 0)
+mesh = SubResource("IslandGrass")
+material_override = SubResource("GrassMat")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Island"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
-shape = SubResource("CylinderShape3D_island")
+position = Vector3(0, 2.0, 0)
+shape = SubResource("IslandShape")
+
+[node name="Palm1Trunk" type="MeshInstance3D" parent="Island"]
+position = Vector3(-5.5, 5.4, -1.5)
+rotation = Vector3(0.12, 0, -0.09)
+mesh = SubResource("TrunkMesh")
+material_override = SubResource("TrunkMat")
+
+[node name="Palm1Top" type="MeshInstance3D" parent="Island"]
+position = Vector3(-5.7, 7.25, -1.35)
+scale = Vector3(1.65, 0.55, 1.65)
+mesh = SubResource("PalmTopMesh")
+material_override = SubResource("LeafMat")
+
+[node name="Palm2Trunk" type="MeshInstance3D" parent="Island"]
+position = Vector3(4.8, 5.2, 2.8)
+rotation = Vector3(-0.08, 0, 0.11)
+mesh = SubResource("TrunkMesh")
+material_override = SubResource("TrunkMat")
+
+[node name="Palm2Top" type="MeshInstance3D" parent="Island"]
+position = Vector3(5.0, 7.1, 2.65)
+scale = Vector3(1.55, 0.52, 1.55)
+mesh = SubResource("PalmTopMesh")
+material_override = SubResource("LeafMat")
+
+[node name="Palm3Trunk" type="MeshInstance3D" parent="Island"]
+position = Vector3(2.0, 5.0, -5.2)
+rotation = Vector3(0.05, 0, -0.05)
+scale = Vector3(0.85, 0.85, 0.85)
+mesh = SubResource("TrunkMesh")
+material_override = SubResource("TrunkMat")
+
+[node name="Palm3Top" type="MeshInstance3D" parent="Island"]
+position = Vector3(1.9, 6.65, -5.1)
+scale = Vector3(1.35, 0.46, 1.35)
+mesh = SubResource("PalmTopMesh")
+material_override = SubResource("LeafMat")
+
+[node name="Rock1" type="MeshInstance3D" parent="Island"]
+position = Vector3(-10.5, 3.2, 5.5)
+scale = Vector3(1.2, 0.8, 1.5)
+mesh = SubResource("RockMesh")
+material_override = SubResource("RockMat")
+
+[node name="Rock2" type="MeshInstance3D" parent="Island"]
+position = Vector3(9.0, 3.0, -6.0)
+scale = Vector3(0.9, 0.65, 1.1)
+mesh = SubResource("RockMesh")
+material_override = SubResource("RockMat")
+
+[node name="SmallIslandA" type="MeshInstance3D" parent="."]
+position = Vector3(-58, 0.6, 42)
+rotation = Vector3(0, 0.35, 0)
+mesh = SubResource("SmallIsland")
+material_override = SubResource("SandMat")
+
+[node name="SmallIslandB" type="MeshInstance3D" parent="."]
+position = Vector3(72, 0.45, 52)
+scale = Vector3(0.72, 0.72, 0.72)
+mesh = SubResource("SmallIsland")
+material_override = SubResource("RockMat")
 
 [node name="PlayerShip" parent="." instance=ExtResource("2_player")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+position = Vector3(0, 0, 0)
 
 [node name="EnemyShip" parent="." instance=ExtResource("3_enemy")]
-transform = Transform3D(0.707, 0, 0.707, 0, 1, 0, -0.707, 0, 0.707, 0, 0, -32)
+position = Vector3(0, 0, -34)
+rotation = Vector3(0, 0.78, 0)
 
 [node name="IsometricCamera" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.707, 0.707, 0, -0.707, 0.707, 0, 18, 15)
+position = Vector3(0, 21, 18)
 current = true
-fov = 55.0
+fov = 52.0
 
 [node name="HUD" parent="." instance=ExtResource("4_hud")]
