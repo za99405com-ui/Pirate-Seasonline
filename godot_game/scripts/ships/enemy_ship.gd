@@ -74,7 +74,7 @@ func _process_combat_ai(delta: float) -> void:
 		rotation.y = rotate_toward(rotation.y, broadside_angle, turn_speed * 1.35 * delta)
 		velocity = -transform.basis.z * (sail_speed * 0.52)
 
-		var flank_alignment := abs(to_player.normalized().dot(transform.basis.x))
+		var flank_alignment: float = absf(to_player.normalized().dot(transform.basis.x))
 		if reload_timer <= 0.0 and flank_alignment > 0.72:
 			reload_timer = fire_cooldown
 			_fire_cannons_at_player(to_player.normalized())
@@ -109,7 +109,7 @@ func _update_bobbing() -> void:
 		visuals.rotation.z = sin(wave_time * 1.36 + patrol_phase) * 0.035
 
 func _update_wake() -> void:
-	var ratio := clamp(velocity.length() / sail_speed, 0.0, 1.0)
+	var ratio: float = clampf(velocity.length() / sail_speed, 0.0, 1.0)
 	for wake in [wake_left, wake_right]:
 		if wake:
 			wake.visible = ratio > 0.08
@@ -132,7 +132,7 @@ func take_damage(amount: float) -> void:
 func _update_health_bar() -> void:
 	if not health_bar_mesh:
 		return
-	var frac := clamp(health / max_health, 0.0, 1.0)
+	var frac: float = clampf(health / max_health, 0.0, 1.0)
 	health_bar_mesh.scale.x = max(0.02, frac)
 	health_bar_mesh.position.x = -(1.0 - frac) * 1.15
 	var mat := health_bar_mesh.material_override as StandardMaterial3D
