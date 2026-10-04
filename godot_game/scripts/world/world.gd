@@ -24,14 +24,14 @@ func _update_camera(delta: float) -> void:
 		return
 
 	var velocity: Vector3 = player_ship.velocity if "velocity" in player_ship else Vector3.ZERO
-	var speed_ratio := clamp(velocity.length() / 14.5, 0.0, 1.0)
-	var forward := -player_ship.global_transform.basis.z
-	var look_ahead := forward * camera_look_ahead * speed_ratio
-	var target_pos := player_ship.global_position + camera_offset + look_ahead * 0.35
-	var smoothing := 1.0 - exp(-camera_follow_speed * delta)
+	var speed_ratio: float = clampf(velocity.length() / 14.5, 0.0, 1.0)
+	var forward: Vector3 = -player_ship.global_transform.basis.z
+	var look_ahead: Vector3 = forward * camera_look_ahead * speed_ratio
+	var target_pos: Vector3 = player_ship.global_position + camera_offset + look_ahead * 0.35
+	var smoothing: float = 1.0 - exp(-camera_follow_speed * delta)
 	camera.global_position = camera.global_position.lerp(target_pos, smoothing)
 
-	var look_target := player_ship.global_position + look_ahead
+	var look_target: Vector3 = player_ship.global_position + look_ahead
 	camera.look_at(look_target, Vector3.UP)
 
 func _update_ocean_anchor() -> void:
