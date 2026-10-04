@@ -5,9 +5,9 @@ extends Node3D
 @onready var hud: CanvasLayer = $HUD
 @onready var ocean: MeshInstance3D = $OceanPlane
 
-@export var camera_offset: Vector3 = Vector3(0.0, 21.0, 18.0)
+@export var camera_offset: Vector3 = Vector3(0.0, 24.0, 21.0)
 @export var camera_follow_speed: float = 4.8
-@export var camera_look_ahead: float = 4.0
+@export var camera_look_ahead: float = 5.0
 @export var enemy_ship_scene: PackedScene = preload("res://scenes/ships/enemy_ship.tscn")
 
 func _ready() -> void:
@@ -47,7 +47,7 @@ func _on_enemy_destroyed(_enemy_name: String) -> void:
 	var new_enemy := enemy_ship_scene.instantiate()
 	add_child(new_enemy)
 	var angle := randf() * TAU
-	var dist := randf_range(38.0, 54.0)
+	var dist: float = randf_range(52.0, 68.0)
 	var spawn_pos := Vector3(cos(angle) * dist, 0.0, sin(angle) * dist)
 	if player_ship and is_instance_valid(player_ship):
 		spawn_pos += player_ship.global_position
