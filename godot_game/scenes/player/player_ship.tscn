@@ -182,6 +182,49 @@ position = Vector3(0, 0.35, 2.95)
 mesh = SubResource("RudderMesh")
 material_override = SubResource("DarkWoodMat")
 
+[node name="PortGunwale" type="MeshInstance3D" parent="Visuals/BaseHull"]
+position = Vector3(-1.22, 1.32, 0.18)
+scale = Vector3(1, 0.9, 1.18)
+mesh = SubResource("RailingMesh")
+material_override = SubResource("DeckWoodMat")
+
+[node name="StarboardGunwale" type="MeshInstance3D" parent="Visuals/BaseHull"]
+position = Vector3(1.22, 1.32, 0.18)
+scale = Vector3(1, 0.9, 1.18)
+mesh = SubResource("RailingMesh")
+material_override = SubResource("DeckWoodMat")
+
+[node name="RearQuarterDeck" type="MeshInstance3D" parent="Visuals/BaseHull"]
+position = Vector3(0, 1.24, 1.9)
+scale = Vector3(0.93, 1.0, 0.34)
+mesh = SubResource("DeckMesh")
+material_override = SubResource("DeckWoodMat")
+
+[node name="BasicStorageChest" type="MeshInstance3D" parent="Visuals/BaseHull"]
+position = Vector3(0.72, 1.48, 1.72)
+scale = Vector3(0.9, 0.9, 0.9)
+mesh = SubResource("ChestMesh")
+material_override = SubResource("DarkWoodMat")
+
+[node name="BasicChestBand" type="MeshInstance3D" parent="Visuals/BaseHull"]
+position = Vector3(0.72, 1.49, 1.70)
+scale = Vector3(0.22, 1.02, 1.04)
+mesh = SubResource("ChestMesh")
+material_override = SubResource("GoldMat")
+
+[node name="RopeBundle" type="MeshInstance3D" parent="Visuals/BaseHull"]
+position = Vector3(-0.78, 1.34, 1.55)
+rotation = Vector3(1.5708, 0, 0)
+scale = Vector3(0.55, 0.32, 0.55)
+mesh = SubResource("BarrelMesh")
+material_override = SubResource("SailMat")
+
+[node name="BowDeckLip" type="MeshInstance3D" parent="Visuals/BaseHull"]
+position = Vector3(0, 1.26, -2.25)
+scale = Vector3(0.94, 0.72, 0.18)
+mesh = SubResource("DeckMesh")
+material_override = SubResource("DarkWoodMat")
+
 [node name="MastMain" type="Node3D" parent="Visuals"]
 
 [node name="MastPole" type="MeshInstance3D" parent="Visuals/MastMain"]
