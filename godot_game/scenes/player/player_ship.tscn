@@ -1,81 +1,189 @@
-[gd_scene load_steps=10 format=3 uid="uid://c3playership001"]
+[gd_scene load_steps=18 format=3 uid="uid://c3playership001"]
 
 [ext_resource type="Script" path="res://scripts/player/player_ship.gd" id="1_ship"]
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_hull"]
-size = Vector3(2.6, 2.2, 5.2)
+[sub_resource type="BoxShape3D" id="HullShape"]
+size = Vector3(2.8, 1.6, 6.0)
 
-[sub_resource type="BoxMesh" id="BoxMesh_hull"]
-size = Vector3(2.2, 1.2, 4.8)
+[sub_resource type="BoxMesh" id="HullMesh"]
+size = Vector3(2.55, 1.05, 5.2)
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_wood"]
-albedo_color = Color(0.48, 0.3, 0.16, 1)
-roughness = 0.65
+[sub_resource type="PrismMesh" id="BowMesh"]
+size = Vector3(2.55, 1.15, 2.0)
 
-[sub_resource type="PrismMesh" id="PrismMesh_bow"]
-size = Vector3(2.2, 1.2, 1.6)
+[sub_resource type="BoxMesh" id="DeckMesh"]
+size = Vector3(2.25, 0.18, 4.8)
 
-[sub_resource type="CylinderMesh" id="CylinderMesh_mast"]
-top_radius = 0.1
-bottom_radius = 0.14
-height = 5.0
+[sub_resource type="BoxMesh" id="CabinMesh"]
+size = Vector3(1.85, 0.85, 1.35)
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_mast"]
-albedo_color = Color(0.6, 0.45, 0.28, 1)
+[sub_resource type="CylinderMesh" id="MastMesh"]
+top_radius = 0.09
+bottom_radius = 0.13
+height = 5.8
+radial_segments = 10
 
-[sub_resource type="BoxMesh" id="BoxMesh_sail"]
-size = Vector3(2.8, 2.6, 0.1)
+[sub_resource type="CylinderMesh" id="BoomMesh"]
+top_radius = 0.06
+bottom_radius = 0.06
+height = 3.4
+radial_segments = 8
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_sail"]
-albedo_color = Color(0.96, 0.96, 0.93, 1)
-roughness = 0.8
+[sub_resource type="BoxMesh" id="MainSailMesh"]
+size = Vector3(3.25, 2.8, 0.05)
+
+[sub_resource type="BoxMesh" id="TopSailMesh"]
+size = Vector3(2.15, 1.35, 0.045)
+
+[sub_resource type="BoxMesh" id="FlagMesh"]
+size = Vector3(1.0, 0.48, 0.04)
+
+[sub_resource type="CylinderMesh" id="CannonMesh"]
+top_radius = 0.12
+bottom_radius = 0.18
+height = 0.85
+radial_segments = 10
+
+[sub_resource type="BoxMesh" id="WakeMesh"]
+size = Vector3(0.55, 0.03, 3.4)
+
+[sub_resource type="StandardMaterial3D" id="WoodMat"]
+albedo_color = Color(0.34, 0.16, 0.07, 1)
+roughness = 0.72
+
+[sub_resource type="StandardMaterial3D" id="DeckMat"]
+albedo_color = Color(0.62, 0.39, 0.18, 1)
+roughness = 0.68
+
+[sub_resource type="StandardMaterial3D" id="SailMat"]
+albedo_color = Color(0.96, 0.91, 0.76, 1)
+roughness = 0.82
+
+[sub_resource type="StandardMaterial3D" id="AccentMat"]
+albedo_color = Color(0.10, 0.32, 0.52, 1)
+metallic = 0.08
+roughness = 0.5
+
+[sub_resource type="StandardMaterial3D" id="MetalMat"]
+albedo_color = Color(0.09, 0.11, 0.14, 1)
+metallic = 0.65
+roughness = 0.34
+
+[sub_resource type="StandardMaterial3D" id="WakeMat"]
+albedo_color = Color(0.82, 0.95, 1, 0.45)
+transparency = 1
+shading_mode = 0
 
 [node name="PlayerShip" type="CharacterBody3D"]
 script = ExtResource("1_ship")
-max_speed = 13.5
-acceleration = 3.4
-deceleration = 1.9
-turn_speed = 1.8
+max_speed = 14.5
+acceleration = 4.2
+deceleration = 2.6
+turn_speed = 1.45
 max_health = 100.0
+reload_time = 2.0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0)
-shape = SubResource("BoxShape3D_hull")
+position = Vector3(0, 0.75, 0)
+shape = SubResource("HullShape")
 
 [node name="Visuals" type="Node3D" parent="."]
 
-[node name="HullMesh" type="MeshInstance3D" parent="Visuals"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
-mesh = SubResource("BoxMesh_hull")
-surface_material_override/0 = SubResource("StandardMaterial3D_wood")
+[node name="LowerHull" type="MeshInstance3D" parent="Visuals"]
+position = Vector3(0, 0.42, 0.15)
+mesh = SubResource("HullMesh")
+material_override = SubResource("WoodMat")
 
-[node name="BowMesh" type="MeshInstance3D" parent="Visuals"]
-transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 0.6, -3.0)
-mesh = SubResource("PrismMesh_bow")
-surface_material_override/0 = SubResource("StandardMaterial3D_wood")
+[node name="Bow" type="MeshInstance3D" parent="Visuals"]
+position = Vector3(0, 0.44, -3.1)
+rotation = Vector3(1.5708, 0, 0)
+mesh = SubResource("BowMesh")
+material_override = SubResource("WoodMat")
 
-[node name="MastMesh" type="MeshInstance3D" parent="Visuals"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.5, -0.4)
-mesh = SubResource("CylinderMesh_mast")
-surface_material_override/0 = SubResource("StandardMaterial3D_mast")
+[node name="Deck" type="MeshInstance3D" parent="Visuals"]
+position = Vector3(0, 1.02, 0.05)
+mesh = SubResource("DeckMesh")
+material_override = SubResource("DeckMat")
+
+[node name="Cabin" type="MeshInstance3D" parent="Visuals"]
+position = Vector3(0, 1.46, 1.65)
+mesh = SubResource("CabinMesh")
+material_override = SubResource("AccentMat")
+
+[node name="Mast" type="MeshInstance3D" parent="Visuals"]
+position = Vector3(0, 3.65, -0.45)
+mesh = SubResource("MastMesh")
+material_override = SubResource("DeckMat")
+
+[node name="Boom" type="MeshInstance3D" parent="Visuals"]
+position = Vector3(0, 3.55, -0.45)
+rotation = Vector3(0, 0, 1.5708)
+mesh = SubResource("BoomMesh")
+material_override = SubResource("DeckMat")
 
 [node name="MainSail" type="MeshInstance3D" parent="Visuals"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.8, -0.4)
-mesh = SubResource("BoxMesh_sail")
-surface_material_override/0 = SubResource("StandardMaterial3D_sail")
+position = Vector3(0, 4.05, -0.52)
+mesh = SubResource("MainSailMesh")
+material_override = SubResource("SailMat")
+
+[node name="TopSail" type="MeshInstance3D" parent="Visuals"]
+position = Vector3(0, 5.85, -0.50)
+mesh = SubResource("TopSailMesh")
+material_override = SubResource("SailMat")
+
+[node name="Flag" type="MeshInstance3D" parent="Visuals"]
+position = Vector3(0.55, 6.65, -0.46)
+mesh = SubResource("FlagMesh")
+material_override = SubResource("AccentMat")
+
+[node name="PortCannonVisual1" type="MeshInstance3D" parent="Visuals"]
+position = Vector3(-1.38, 1.08, -0.9)
+rotation = Vector3(0, 0, 1.5708)
+mesh = SubResource("CannonMesh")
+material_override = SubResource("MetalMat")
+
+[node name="PortCannonVisual2" type="MeshInstance3D" parent="Visuals"]
+position = Vector3(-1.38, 1.08, 0.85)
+rotation = Vector3(0, 0, 1.5708)
+mesh = SubResource("CannonMesh")
+material_override = SubResource("MetalMat")
+
+[node name="StarboardCannonVisual1" type="MeshInstance3D" parent="Visuals"]
+position = Vector3(1.38, 1.08, -0.9)
+rotation = Vector3(0, 0, 1.5708)
+mesh = SubResource("CannonMesh")
+material_override = SubResource("MetalMat")
+
+[node name="StarboardCannonVisual2" type="MeshInstance3D" parent="Visuals"]
+position = Vector3(1.38, 1.08, 0.85)
+rotation = Vector3(0, 0, 1.5708)
+mesh = SubResource("CannonMesh")
+material_override = SubResource("MetalMat")
+
+[node name="WakeLeft" type="MeshInstance3D" parent="Visuals"]
+position = Vector3(-0.72, 0.06, 3.75)
+rotation = Vector3(0, 0.18, 0)
+mesh = SubResource("WakeMesh")
+material_override = SubResource("WakeMat")
+
+[node name="WakeRight" type="MeshInstance3D" parent="Visuals"]
+position = Vector3(0.72, 0.06, 3.75)
+rotation = Vector3(0, -0.18, 0)
+mesh = SubResource("WakeMesh")
+material_override = SubResource("WakeMat")
 
 [node name="PortCannons" type="Node3D" parent="Visuals"]
 
 [node name="PortMarker1" type="Marker3D" parent="Visuals/PortCannons"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.3, 0.7, -0.8)
+position = Vector3(-1.62, 1.05, -0.9)
 
 [node name="PortMarker2" type="Marker3D" parent="Visuals/PortCannons"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.3, 0.7, 0.8)
+position = Vector3(-1.62, 1.05, 0.85)
 
 [node name="StarboardCannons" type="Node3D" parent="Visuals"]
 
 [node name="StarboardMarker1" type="Marker3D" parent="Visuals/StarboardCannons"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, 0.7, -0.8)
+position = Vector3(1.62, 1.05, -0.9)
 
 [node name="StarboardMarker2" type="Marker3D" parent="Visuals/StarboardCannons"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.3, 0.7, 0.8)
+position = Vector3(1.62, 1.05, 0.85)
