@@ -85,8 +85,8 @@ func _handle_movement(delta: float) -> void:
 	if throttle == 0.0:
 		current_forward_speed = move_toward(current_forward_speed, 0.0, water_drag * delta)
 
-	var speed_ratio := clamp(abs(current_forward_speed) / max_speed, 0.0, 1.0)
-	var steering_authority := lerp(0.28, 1.0, speed_ratio)
+	var speed_ratio: float = clampf(absf(current_forward_speed) / max_speed, 0.0, 1.0)
+	var steering_authority: float = lerpf(0.28, 1.0, speed_ratio)
 	if abs(rudder) > 0.0:
 		rotation.y -= rudder * turn_speed * steering_authority * delta
 
@@ -100,7 +100,7 @@ func _handle_wave_bobbing(delta: float) -> void:
 	wave_time += delta * bobbing_speed
 
 	var speed_ratio := clamp(abs(current_forward_speed) / max_speed, 0.0, 1.0)
-	var y_offset := sin(wave_time) * bobbing_amount + sin(wave_time * 1.73) * bobbing_amount * 0.35
+	var y_offset: float = sin(wave_time) * bobbing_amount + sin(wave_time * 1.73) * bobbing_amount * 0.35
 	visuals.position.y = y_offset
 
 	var pitch := cos(wave_time * 0.82) * pitch_amount
@@ -110,7 +110,7 @@ func _handle_wave_bobbing(delta: float) -> void:
 
 func _update_wake(_delta: float) -> void:
 	var speed_ratio := clamp(abs(current_forward_speed) / max_speed, 0.0, 1.0)
-	var wake_scale := lerp(0.35, 1.35, speed_ratio)
+	var wake_scale: float = lerpf(0.35, 1.35, speed_ratio)
 	for wake in [wake_left, wake_right]:
 		if wake:
 			wake.visible = speed_ratio > 0.08
