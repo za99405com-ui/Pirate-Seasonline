@@ -244,6 +244,7 @@ rotation = Vector3(0, 0.78, 0)
 
 [node name="IsometricCamera" type="Camera3D" parent="."]
 position = Vector3(0, 21, 18)
+rotation = Vector3(-0.862, 0, 0)
 current = true
 fov = 52.0
 
