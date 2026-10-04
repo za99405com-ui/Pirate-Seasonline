@@ -48,7 +48,12 @@ jobs:
       - name: Import and validate project
         working-directory: godot_game
         run: |
-          godot --headless --path . --editor --quit
+          set -o pipefail
+          godot --headless --path . --editor --quit 2>&1 | tee /tmp/godot-validate.log
+          if grep -E "SCRIPT ERROR|Parse Error|Failed to load script" /tmp/godot-validate.log; then
+            echo "Godot script validation failed."
+            exit 1
+          fi
 
       - name: Export Web preview
         working-directory: godot_game
