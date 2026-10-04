@@ -133,9 +133,9 @@ roughness = 0.95
 
 [node name="World" type="Node3D"]
 script = ExtResource("1_world")
-camera_offset = Vector3(0, 21, 18)
+camera_offset = Vector3(0, 24, 21)
 camera_follow_speed = 4.8
-camera_look_ahead = 4.0
+camera_look_ahead = 5.0
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Env")
@@ -239,13 +239,13 @@ material_override = SubResource("RockMat")
 position = Vector3(0, 0, 0)
 
 [node name="EnemyShip" parent="." instance=ExtResource("3_enemy")]
-position = Vector3(0, 0, -34)
+position = Vector3(0, 0, -58)
 rotation = Vector3(0, 0.78, 0)
 
 [node name="IsometricCamera" type="Camera3D" parent="."]
-position = Vector3(0, 21, 18)
+position = Vector3(0, 24, 21)
 rotation = Vector3(-0.862, 0, 0)
 current = true
-fov = 52.0
+fov = 55.0
 
 [node name="HUD" parent="." instance=ExtResource("4_hud")]
