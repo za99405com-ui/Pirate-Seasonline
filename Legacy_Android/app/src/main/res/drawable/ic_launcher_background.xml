@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="0"
+                android:startY="0"
+                android:endX="108"
+                android:endY="108"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#0B1A30" />
+                <item android:offset="0.6" android:color="#0F2D54" />
+                <item android:offset="1.0" android:color="#094074" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Ocean wave decorative lines -->
+    <path
+        android:pathData="M0,82 C20,78 35,86 54,82 C73,78 88,86 108,82 L108,108 L0,108 Z"
+        android:fillColor="#154B85"
+        android:fillAlpha="0.35" />
+    <path
+        android:pathData="M0,92 C25,88 45,95 65,90 C85,85 95,93 108,91 L108,108 L0,108 Z"
+        android:fillColor="#0D3560"
+        android:fillAlpha="0.5" />
+</vector>

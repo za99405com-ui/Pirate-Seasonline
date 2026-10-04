@@ -1,0 +1,63 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Main Mast -->
+    <path
+        android:fillColor="#E6C280"
+        android:pathData="M52,24 L56,24 L56,72 L52,72 Z" />
+    <path
+        android:fillColor="#C69B56"
+        android:pathData="M38,36 L70,36 L70,38 L38,38 Z" />
+    <path
+        android:fillColor="#C69B56"
+        android:pathData="M42,50 L66,50 L66,52 L42,52 Z" />
+        
+    <!-- Pirate Top Sail -->
+    <path
+        android:fillColor="#F4F1EA"
+        android:pathData="M40,38 Q54,42 68,38 Q64,48 54,49 Q44,48 40,38 Z" />
+    <!-- Pirate Jolly Roger emblem on main sail -->
+    <path
+        android:fillColor="#E53935"
+        android:pathData="M52,42 Q54,40 56,42 Q56,45 54,46 Q52,45 52,42 Z" />
+
+    <!-- Pirate Lower Sail -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M43,52 Q54,57 65,52 Q62,64 54,65 Q46,64 43,52 Z" />
+
+    <!-- Pirate Ship Hull -->
+    <path
+        android:fillColor="#8D5524"
+        android:pathData="M28,68 L80,68 C76,78 68,82 54,82 C40,82 32,78 28,68 Z" />
+    <!-- Hull Trim / Gold Gunport Stripe -->
+    <path
+        android:fillColor="#FFC107"
+        android:pathData="M31,70 L77,70 C74,74 66,76 54,76 C42,76 34,74 31,70 Z" />
+    <!-- Cannon ports -->
+    <path
+        android:fillColor="#212121"
+        android:pathData="M38,72 A1.5,1.5 0 1,0 41,72 A1.5,1.5 0 1,0 38,72 Z" />
+    <path
+        android:fillColor="#212121"
+        android:pathData="M46,72 A1.5,1.5 0 1,0 49,72 A1.5,1.5 0 1,0 46,72 Z" />
+    <path
+        android:fillColor="#212121"
+        android:pathData="M54,72 A1.5,1.5 0 1,0 57,72 A1.5,1.5 0 1,0 54,72 Z" />
+    <path
+        android:fillColor="#212121"
+        android:pathData="M62,72 A1.5,1.5 0 1,0 65,72 A1.5,1.5 0 1,0 62,72 Z" />
+    <path
+        android:fillColor="#212121"
+        android:pathData="M70,72 A1.5,1.5 0 1,0 73,72 A1.5,1.5 0 1,0 70,72 Z" />
+
+    <!-- Pirate Flag (Jolly Roger) at top -->
+    <path
+        android:fillColor="#212121"
+        android:pathData="M54,24 L64,28 L54,32 Z" />
+    <path
+        android:fillColor="#FFD700"
+        android:pathData="M57,27 A1,1 0 1,0 59,27 A1,1 0 1,0 57,27 Z" />
+</vector>

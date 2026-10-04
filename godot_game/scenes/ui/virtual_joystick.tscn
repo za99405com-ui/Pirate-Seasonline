@@ -1,0 +1,13 @@
+[gd_scene load_steps=2 format=3 uid="uid://bvk7joystick01"]
+
+[ext_resource type="Script" path="res://scripts/ui/virtual_joystick.gd" id="1_joy"]
+
+[node name="VirtualJoystick" type="Control"]
+custom_minimum_size = Vector2(160, 160)
+layout_mode = 3
+anchors_preset = 0
+offset_right = 160.0
+offset_bottom = 160.0
+script = ExtResource("1_joy")
+max_radius = 65.0
+deadzone = 0.15

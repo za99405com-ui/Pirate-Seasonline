@@ -1,0 +1,37 @@
+[gd_scene load_steps=5 format=3 uid="uid://b5goldcrate001"]
+
+[ext_resource type="Script" path="res://scripts/loot/gold_crate.gd" id="1_loot"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_pickup"]
+radius = 1.6
+
+[sub_resource type="BoxMesh" id="BoxMesh_crate"]
+size = Vector3(0.9, 0.65, 0.7)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_goldwood"]
+albedo_color = Color(0.72, 0.48, 0.18, 1)
+metallic = 0.3
+roughness = 0.5
+emission_enabled = true
+emission = Color(0.9, 0.7, 0.15, 1)
+emission_energy_multiplier = 0.4
+
+[node name="GoldCrate" type="Area3D"]
+script = ExtResource("1_loot")
+gold_value = 25
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("SphereShape3D_pickup")
+
+[node name="Visuals" type="Node3D" parent="."]
+
+[node name="CrateMesh" type="MeshInstance3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, 0)
+mesh = SubResource("BoxMesh_crate")
+surface_material_override/0 = SubResource("StandardMaterial3D_goldwood")
+
+[node name="OmniLight3D" type="OmniLight3D" parent="Visuals"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 0)
+light_color = Color(1, 0.85, 0.2, 1)
+light_energy = 1.2
+omni_range = 3.5
