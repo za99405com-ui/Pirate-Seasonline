@@ -60,7 +60,26 @@ jobs:
         run: |
           mkdir -p build/web
           godot --headless --path . --export-release "Web Preview" build/web/index.html
+
+          BUILD_ID="${GITHUB_SHA::8}"
+          mv build/web/index.js "build/web/game-${BUILD_ID}.js"
+          mv build/web/index.wasm "build/web/game-${BUILD_ID}.wasm"
+          mv build/web/index.pck "build/web/game-${BUILD_ID}.pck"
+          if [ -f build/web/index.audio.worklet.js ]; then
+            mv build/web/index.audio.worklet.js "build/web/game-${BUILD_ID}.audio.worklet.js"
+          fi
+
+          sed -i "s#index.js#game-${BUILD_ID}.js#g" build/web/index.html
+          sed -i "s#\\\"executable\\\":\\\"index\\\"#\\\"executable\\\":\\\"game-${BUILD_ID}\\\"#g" build/web/index.html
+          sed -i "s#index.pck#game-${BUILD_ID}.pck#g" build/web/index.html
+          sed -i "s#index.wasm#game-${BUILD_ID}.wasm#g" build/web/index.html
+
+          sed -i '/<head>/a\\		<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">\\
+		<meta http-equiv="Pragma" content="no-cache">\\
+		<meta http-equiv="Expires" content="0">' build/web/index.html
+
           touch build/web/.nojekyll
+          echo "Web preview build id: ${BUILD_ID}"
           ls -lah build/web
 
       - name: Upload Web build backup
