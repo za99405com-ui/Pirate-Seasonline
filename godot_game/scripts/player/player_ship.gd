@@ -99,17 +99,17 @@ func _handle_wave_bobbing(delta: float) -> void:
 		return
 	wave_time += delta * bobbing_speed
 
-	var speed_ratio := clamp(abs(current_forward_speed) / max_speed, 0.0, 1.0)
+	var speed_ratio: float = clampf(absf(current_forward_speed) / max_speed, 0.0, 1.0)
 	var y_offset: float = sin(wave_time) * bobbing_amount + sin(wave_time * 1.73) * bobbing_amount * 0.35
 	visuals.position.y = y_offset
 
-	var pitch := cos(wave_time * 0.82) * pitch_amount
-	var roll := sin(wave_time * 1.07) * roll_amount
+	var pitch: float = cos(wave_time * 0.82) * pitch_amount
+	var roll: float = sin(wave_time * 1.07) * roll_amount
 	roll += -joystick_input.x * turn_bank_amount * speed_ratio
 	visuals.rotation = Vector3(pitch, 0.0, roll)
 
 func _update_wake(_delta: float) -> void:
-	var speed_ratio := clamp(abs(current_forward_speed) / max_speed, 0.0, 1.0)
+	var speed_ratio: float = clampf(absf(current_forward_speed) / max_speed, 0.0, 1.0)
 	var wake_scale: float = lerpf(0.35, 1.35, speed_ratio)
 	for wake in [wake_left, wake_right]:
 		if wake:
