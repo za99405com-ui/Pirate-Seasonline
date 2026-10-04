@@ -31,7 +31,7 @@ size = Vector2(500, 500)
 albedo_color = Color(0.06, 0.28, 0.52, 0.92)
 metallic = 0.1
 roughness = 0.15
-transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+transparency = 1
 
 [sub_resource type="CylinderMesh" id="CylinderMesh_island_sand"]
 top_radius = 18.0
