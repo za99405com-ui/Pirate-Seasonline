@@ -4,7 +4,8 @@ extends CharacterBody3D
 @export var sail_speed: float = 7.8
 @export var turn_speed: float = 1.25
 @export var aggro_distance: float = 70.0
-@export var combat_distance: float = 25.0
+@export var combat_distance: float = 30.0
+@export var minimum_separation: float = 18.0
 @export var fire_cooldown: float = 3.2
 @export var cannon_damage: float = 20.0
 @export var loot_crate_scene: PackedScene = preload("res://scenes/loot/gold_crate.tscn")
@@ -63,8 +64,14 @@ func _process_combat_ai(delta: float) -> void:
 
 	reload_timer = max(0.0, reload_timer - delta)
 
-	if dist > combat_distance:
-		var target_angle := atan2(-to_player.x, -to_player.z)
+	if dist < minimum_separation:
+		# Never ram/overlap the player. Back away while turning broadside.
+		var away: Vector3 = -to_player.normalized()
+		var retreat_angle: float = atan2(-away.x, -away.z)
+		rotation.y = rotate_toward(rotation.y, retreat_angle, turn_speed * 1.6 * delta)
+		velocity = away * (sail_speed * 0.75)
+	elif dist > combat_distance:
+		var target_angle: float = atan2(-to_player.x, -to_player.z)
 		rotation.y = rotate_toward(rotation.y, target_angle, turn_speed * delta)
 		velocity = -transform.basis.z * sail_speed
 	else:
