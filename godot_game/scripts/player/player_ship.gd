@@ -15,11 +15,12 @@ signal ship_level_upgraded(new_level: int, title: String)
 @export var rudder_response: float = 3.8
 
 @export_group("Travel Mode")
-@export var travel_entry_distance: float = 52.0
+@export var travel_entry_distance: float = 22.0
 @export var travel_speed_multiplier: float = 1.5
-@export var travel_heading_tolerance_degrees: float = 24.0
+@export var travel_heading_tolerance_degrees: float = 30.0
 @export var travel_min_speed_ratio: float = 0.55
-@export var travel_turn_limit: float = 0.60
+@export var travel_turn_limit: float = 0.72
+@export var travel_transition_time: float = 1.35
 
 @export_group("Wave Simulation")
 @export var bobbing_speed: float = 1.7
@@ -41,6 +42,7 @@ var smoothed_rudder: float = 0.0
 var wave_time: float = 0.0
 var current_level: int = 1
 var travel_mode: bool = false
+var travel_blend: float = 0.0
 var travel_progress_distance: float = 0.0
 var travel_reference_heading: Vector3 = Vector3.ZERO
 var travel_last_position: Vector3 = Vector3.ZERO
@@ -49,6 +51,7 @@ var travel_sail_nodes: Array[Node3D] = []
 var travel_sail_scales: Dictionary = {}
 var travel_wind_root: Node3D = null
 var travel_wind_strips: Array[MeshInstance3D] = []
+var travel_wind_material: StandardMaterial3D = null
 var travel_wind_time: float = 0.0
 var world_health_anchor: Node3D = null
 var world_health_fill: MeshInstance3D = null
@@ -104,7 +107,7 @@ func _handle_movement(delta: float) -> void:
 	smoothed_throttle = move_toward(smoothed_throttle, raw_throttle, throttle_response * delta)
 	smoothed_rudder = move_toward(smoothed_rudder, raw_rudder, rudder_response * delta)
 
-	var active_max_speed: float = max_speed * (travel_speed_multiplier if travel_mode else 1.0)
+	var active_max_speed: float = lerpf(max_speed, max_speed * travel_speed_multiplier, travel_blend)
 	var target_speed: float = 0.0
 	if smoothed_throttle >= 0.0:
 		target_speed = smoothed_throttle * active_max_speed
@@ -118,7 +121,7 @@ func _handle_movement(delta: float) -> void:
 	if absf(raw_throttle) < 0.01 and absf(smoothed_throttle) < 0.04:
 		current_forward_speed = move_toward(current_forward_speed, 0.0, water_drag * delta)
 
-	var steering_speed_base: float = max_speed * (travel_speed_multiplier if travel_mode else 1.0)
+	var steering_speed_base: float = lerpf(max_speed, max_speed * travel_speed_multiplier, travel_blend)
 	var speed_ratio: float = clampf(absf(current_forward_speed) / maxf(steering_speed_base, 0.01), 0.0, 1.0)
 	var steering_authority: float = lerpf(0.18, 1.0, speed_ratio)
 	if absf(smoothed_rudder) > 0.01:
@@ -181,24 +184,13 @@ func _reset_travel_progress() -> void:
 	travel_reference_heading = Vector3.ZERO
 
 func _set_travel_mode(active: bool) -> void:
-	if travel_mode == active:
-		return
 	travel_mode = active
-
-	for sail in travel_sail_nodes:
-		if not is_instance_valid(sail):
-			continue
-		var base_scale_value: Variant = travel_sail_scales.get(sail.get_instance_id(), sail.scale)
-		var base_scale: Vector3 = base_scale_value if base_scale_value is Vector3 else sail.scale
-		var target_scale: Vector3 = base_scale * (1.13 if active else 1.0)
-		var tween := sail.create_tween()
-		tween.tween_property(sail, "scale", target_scale, 0.45)
-
-	if travel_wind_root:
-		travel_wind_root.visible = active
 
 func is_travel_mode() -> bool:
 	return travel_mode
+
+func get_travel_blend() -> float:
+	return travel_blend
 
 func get_travel_progress() -> float:
 	return clampf(travel_progress_distance / maxf(travel_entry_distance, 0.01), 0.0, 1.0)
@@ -235,21 +227,21 @@ func _setup_travel_wind() -> void:
 	visuals.add_child(travel_wind_root)
 	travel_wind_root.visible = false
 
-	var wind_material := StandardMaterial3D.new()
-	wind_material.albedo_color = Color(0.78, 0.94, 1.0, 0.42)
-	wind_material.emission_enabled = true
-	wind_material.emission = Color(0.45, 0.78, 1.0, 1.0)
-	wind_material.emission_energy_multiplier = 0.85
-	wind_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	wind_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	wind_material.no_depth_test = true
+	travel_wind_material = StandardMaterial3D.new()
+	travel_wind_material.albedo_color = Color(0.78, 0.94, 1.0, 0.0)
+	travel_wind_material.emission_enabled = true
+	travel_wind_material.emission = Color(0.45, 0.78, 1.0, 1.0)
+	travel_wind_material.emission_energy_multiplier = 0.85
+	travel_wind_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	travel_wind_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	travel_wind_material.no_depth_test = true
 
 	for i in range(8):
 		var strip := MeshInstance3D.new()
 		var mesh := BoxMesh.new()
 		mesh.size = Vector3(0.055, 0.045, 3.8 + float(i % 3) * 0.9)
 		strip.mesh = mesh
-		strip.material_override = wind_material
+		strip.material_override = travel_wind_material
 		strip.position = Vector3(
 			-4.6 + float(i % 4) * 3.0,
 			2.2 + float(i % 3) * 1.4,
@@ -259,7 +251,28 @@ func _setup_travel_wind() -> void:
 		travel_wind_strips.append(strip)
 
 func _update_travel_effects(delta: float) -> void:
-	if not travel_mode or not travel_wind_root:
+	var target_blend: float = 1.0 if travel_mode else 0.0
+	var blend_rate: float = 1.0 / maxf(travel_transition_time, 0.05)
+	travel_blend = move_toward(travel_blend, target_blend, blend_rate * delta)
+
+	# Open the sails progressively instead of popping instantly.
+	for sail in travel_sail_nodes:
+		if not is_instance_valid(sail):
+			continue
+		var base_scale_value: Variant = travel_sail_scales.get(sail.get_instance_id(), sail.scale)
+		var base_scale: Vector3 = base_scale_value if base_scale_value is Vector3 else sail.scale
+		sail.scale = base_scale * lerpf(1.0, 1.13, travel_blend)
+
+	if not travel_wind_root:
+		return
+
+	travel_wind_root.visible = travel_blend > 0.02
+	if travel_wind_material:
+		var c: Color = travel_wind_material.albedo_color
+		c.a = 0.42 * travel_blend
+		travel_wind_material.albedo_color = c
+
+	if travel_blend <= 0.02:
 		return
 
 	travel_wind_time += delta
@@ -267,10 +280,10 @@ func _update_travel_effects(delta: float) -> void:
 		var strip := travel_wind_strips[i]
 		if not is_instance_valid(strip):
 			continue
-		strip.position.z += delta * (10.0 + float(i % 3) * 1.8)
+		strip.position.z += delta * (7.0 + 6.0 * travel_blend + float(i % 3) * 1.4)
 		if strip.position.z > 7.0:
 			strip.position.z = -10.0 - float(i % 4)
-		strip.position.x += sin(travel_wind_time * 1.6 + float(i)) * delta * 0.08
+		strip.position.x += sin(travel_wind_time * 1.6 + float(i)) * delta * 0.05 * travel_blend
 
 func _handle_wave_bobbing(delta: float) -> void:
 	if not visuals:
@@ -287,9 +300,10 @@ func _handle_wave_bobbing(delta: float) -> void:
 	visuals.rotation = Vector3(pitch, 0.0, roll)
 
 func _update_wake(_delta: float) -> void:
-	var active_max_speed: float = max_speed * (travel_speed_multiplier if travel_mode else 1.0)
+	var active_max_speed: float = lerpf(max_speed, max_speed * travel_speed_multiplier, travel_blend)
 	var speed_ratio: float = clampf(absf(current_forward_speed) / maxf(active_max_speed, 0.01), 0.0, 1.0)
-	var wake_scale: float = lerpf(0.35, 1.65 if travel_mode else 1.35, speed_ratio)
+	var max_wake_scale: float = lerpf(1.35, 1.65, travel_blend)
+	var wake_scale: float = lerpf(0.35, max_wake_scale, speed_ratio)
 	for wake in [wake_left, wake_right]:
 		if wake:
 			wake.visible = speed_ratio > 0.08
