@@ -1,7 +1,8 @@
-[gd_scene load_steps=58 format=3 uid="uid://c3playership001"]
+[gd_scene load_steps=59 format=3 uid="uid://c3playership001"]
 
 [ext_resource type="Script" path="res://scripts/player/player_ship.gd" id="1_ship"]
 [ext_resource type="Script" path="res://scripts/ships/ship_mount_slot.gd" id="2_slot"]
+[ext_resource type="PackedScene" path="res://assets/models/pirate_ship.glb" id="3_ship_model"]
 
 [sub_resource type="BoxShape3D" id="HullShape"]
 size = Vector3(2.9, 1.8, 6.2)
@@ -412,7 +413,11 @@ shape = SubResource("HullShape")
 
 [node name="Visuals" type="Node3D" parent="."]
 
+[node name="ShipModel" parent="Visuals" instance=ExtResource("3_ship_model")]
+scale = Vector3(0.5, 0.5, 0.5)
+
 [node name="BaseHull" type="Node3D" parent="Visuals"]
+visible = false
 
 [node name="Keel" type="MeshInstance3D" parent="Visuals/BaseHull"]
 position = Vector3(0, 0.18, 0.05)
@@ -605,6 +610,7 @@ mesh = SubResource("LanternCageMesh")
 material_override = SubResource("LanternGlowMat")
 
 [node name="MastMain" type="Node3D" parent="Visuals"]
+visible = false
 
 [node name="MastPole" type="MeshInstance3D" parent="Visuals/MastMain"]
 position = Vector3(0, 4.0, -0.55)
@@ -675,6 +681,7 @@ mesh = SubResource("MastStreamerMesh")
 material_override = SubResource("RedAccentMat")
 
 [node name="ProgressiveParts" type="Node3D" parent="Visuals"]
+visible = false
 
 [node name="cannons_pair_1" type="Node3D" parent="Visuals/ProgressiveParts"]
 
@@ -1253,17 +1260,17 @@ material_override = SubResource("WakeMat")
 [node name="PortCannons" type="Node3D" parent="Visuals"]
 
 [node name="PortMarker1" type="Marker3D" parent="Visuals/PortCannons"]
-position = Vector3(-1.65, 1.15, -0.9)
+position = Vector3(-1.0, 0.58, -0.18)
 
 [node name="PortMarker2" type="Marker3D" parent="Visuals/PortCannons"]
 visible = false
-position = Vector3(-1.65, 1.15, 0.85)
+position = Vector3(-1.0, 0.58, 0.64)
 
 [node name="StarboardCannons" type="Node3D" parent="Visuals"]
 
 [node name="StarboardMarker1" type="Marker3D" parent="Visuals/StarboardCannons"]
-position = Vector3(1.65, 1.15, -0.9)
+position = Vector3(1.0, 0.58, -0.18)
 
 [node name="StarboardMarker2" type="Marker3D" parent="Visuals/StarboardCannons"]
 visible = false
-position = Vector3(1.65, 1.15, 0.85)
+position = Vector3(1.0, 0.58, 0.64)
