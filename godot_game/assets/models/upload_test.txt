@@ -1,0 +1,1 @@
+Temporary staging file for the user-provided pirate ship model.
