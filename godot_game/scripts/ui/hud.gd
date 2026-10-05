@@ -93,13 +93,13 @@ func _create_lock_button() -> void:
 	if not controls_root:
 		return
 
-	target_button = _make_combat_button("LOCK", Vector2(96.0, 48.0))
-	target_button.name = "TargetLockButton"
+	target_button = _make_combat_button("CAM LOCK", Vector2(108.0, 48.0))
+	target_button.name = "CameraLockButton"
 	target_button.anchor_left = 1.0
 	target_button.anchor_top = 1.0
 	target_button.anchor_right = 1.0
 	target_button.anchor_bottom = 1.0
-	target_button.offset_left = -218.0
+	target_button.offset_left = -230.0
 	target_button.offset_top = -170.0
 	target_button.offset_right = -122.0
 	target_button.offset_bottom = -122.0
@@ -243,9 +243,9 @@ func _update_combat_hud() -> void:
 		elif mode == "DEFENSE":
 			war_mode_label.text = "WAR • DEFENSE"
 
-	if target_button and world_controller.has_method("get_combat_target"):
-		var target: Variant = world_controller.call("get_combat_target")
-		target_button.text = "UNLOCK" if target is Node3D and is_instance_valid(target) else "LOCK"
+	if target_button and world_controller.has_method("is_ship_camera_locked"):
+		var locked: bool = bool(world_controller.call("is_ship_camera_locked"))
+		target_button.text = "CAM LOCKED" if locked else "FREE CAM"
 
 func _update_upgrade_button() -> void:
 	if not upgrade_btn:
@@ -306,8 +306,8 @@ func _on_fire_right_pressed() -> void:
 		player_ship.fire_right()
 
 func _on_target_pressed() -> void:
-	if world_controller and world_controller.has_method("toggle_combat_target"):
-		world_controller.call("toggle_combat_target")
+	if world_controller and world_controller.has_method("toggle_ship_camera_lock"):
+		world_controller.call("toggle_ship_camera_lock")
 
 func _on_aim_joystick_moved(vec: Vector2) -> void:
 	if not player_ship or not is_instance_valid(player_ship):
