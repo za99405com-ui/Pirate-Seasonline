@@ -46,9 +46,10 @@ func _ready() -> void:
 	_on_ship_level_changed(GameManager.current_ship_level, current_info.title)
 
 	if fire_left_btn:
-		fire_left_btn.pressed.connect(_on_fire_left_pressed)
+		fire_left_btn.pressed.connect(_on_fire_pressed)
 	if fire_right_btn:
-		fire_right_btn.pressed.connect(_on_fire_right_pressed)
+		fire_right_btn.button_down.connect(_on_brace_down)
+		fire_right_btn.button_up.connect(_on_brace_up)
 	if upgrade_btn:
 		upgrade_btn.pressed.connect(_on_upgrade_pressed)
 
@@ -209,24 +210,35 @@ func _process(_delta: float) -> void:
 	if player_ship.has_method("get_cannons_per_side"):
 		cannon_count = int(player_ship.call("get_cannons_per_side"))
 
-	_update_fire_button(fire_left_btn, true, cannon_count)
-	_update_fire_button(fire_right_btn, false, cannon_count)
+	_update_fire_button(cannon_count)
+	_update_brace_button()
 	_update_combat_hud()
 	_update_upgrade_button()
 
-func _update_fire_button(button: Button, is_port: bool, cannon_count: int) -> void:
-	if not button:
+func _update_fire_button(cannon_count: int) -> void:
+	if not fire_left_btn:
 		return
 
-	var cooldown: float = player_ship.port_cooldown if is_port else player_ship.starboard_cooldown
-	var side_name: String = "PORT" if is_port else "STARBOARD"
+	var side: int = 1
+	if player_ship.has_method("get_active_broadside_side"):
+		side = int(player_ship.call("get_active_broadside_side"))
+
+	var cooldown: float = player_ship.port_cooldown if side < 0 else player_ship.starboard_cooldown
+	var side_name: String = "PORT" if side < 0 else "STARBOARD"
 
 	if cooldown > 0.0:
-		button.disabled = true
-		button.text = "%s ×%d\nRELOAD %.1f" % [side_name, cannon_count, cooldown]
+		fire_left_btn.disabled = true
+		fire_left_btn.text = "%s ×%d\nRELOAD %.1f" % [side_name, cannon_count, cooldown]
 	else:
-		button.disabled = false
-		button.text = "%s ×%d\nFIRE" % [side_name, cannon_count]
+		fire_left_btn.disabled = false
+		fire_left_btn.text = "%s ×%d\nFIRE" % [side_name, cannon_count]
+
+func _update_brace_button() -> void:
+	if not fire_right_btn:
+		return
+	var bracing_value: Variant = player_ship.get("is_bracing")
+	var bracing: bool = bool(bracing_value) if bracing_value is bool else false
+	fire_right_btn.text = "BRACING" if bracing else "BRACE"
 
 func _update_combat_hud() -> void:
 	if not world_controller:
@@ -297,13 +309,18 @@ func _show_notification(text: String) -> void:
 	tw.tween_interval(1.4)
 	tw.tween_property(notification_banner, "modulate:a", 0.0, 0.35)
 
-func _on_fire_left_pressed() -> void:
+func _on_fire_pressed() -> void:
 	if player_ship and is_instance_valid(player_ship):
-		player_ship.fire_left()
+		if player_ship.has_method("fire_active_broadside"):
+			player_ship.call("fire_active_broadside")
 
-func _on_fire_right_pressed() -> void:
-	if player_ship and is_instance_valid(player_ship):
-		player_ship.fire_right()
+func _on_brace_down() -> void:
+	if player_ship and is_instance_valid(player_ship) and player_ship.has_method("set_bracing"):
+		player_ship.call("set_bracing", true)
+
+func _on_brace_up() -> void:
+	if player_ship and is_instance_valid(player_ship) and player_ship.has_method("set_bracing"):
+		player_ship.call("set_bracing", false)
 
 func _on_target_pressed() -> void:
 	if world_controller and world_controller.has_method("toggle_ship_camera_lock"):
