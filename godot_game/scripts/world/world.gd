@@ -16,6 +16,11 @@ extends Node3D
 @export var camera_max_pitch: float = 0.96
 @export var camera_return_delay: float = 0.28
 
+@export_group("Travel Camera")
+@export var travel_camera_distance: float = 36.5
+@export var travel_camera_pitch: float = 0.56
+@export var travel_camera_fov: float = 64.0
+
 @export_group("Combat Awareness")
 @export var combat_enter_distance: float = 68.0
 @export var combat_exit_distance: float = 82.0
@@ -94,7 +99,8 @@ func _snap_camera() -> void:
 	if not player_ship or not camera:
 		return
 
-	var distance: float = combat_camera_distance if _in_combat else camera_distance
+	var travel_active: bool = _is_travel_active()
+	var distance: float = combat_camera_distance if _in_combat else (travel_camera_distance if travel_active else camera_distance)
 	camera.global_position = player_ship.global_position + _camera_offset(distance)
 	camera.look_at(player_ship.global_position + Vector3(0.0, 2.0, 0.0), Vector3.UP)
 
@@ -103,8 +109,9 @@ func _update_camera(delta: float) -> void:
 		return
 
 	var camera_is_held: bool = _camera_drag_touch != -1 or _mouse_orbiting
+	var travel_active: bool = _is_travel_active()
 	var desired_yaw: float = player_ship.global_rotation.y
-	var desired_pitch: float = combat_camera_pitch if _in_combat else camera_pitch
+	var desired_pitch: float = combat_camera_pitch if _in_combat else (travel_camera_pitch if travel_active else camera_pitch)
 
 	if _in_combat and _combat_enemy and is_instance_valid(_combat_enemy):
 		var to_enemy: Vector3 = _combat_enemy.global_position - player_ship.global_position
@@ -127,8 +134,8 @@ func _update_camera(delta: float) -> void:
 			_camera_yaw = lerp_angle(_camera_yaw, desired_yaw, turn_blend)
 			_camera_pitch = lerpf(_camera_pitch, desired_pitch, turn_blend)
 
-	var desired_distance: float = combat_camera_distance if _in_combat else camera_distance
-	var desired_fov: float = combat_camera_fov if _in_combat else camera_fov
+	var desired_distance: float = combat_camera_distance if _in_combat else (travel_camera_distance if travel_active else camera_distance)
+	var desired_fov: float = combat_camera_fov if _in_combat else (travel_camera_fov if travel_active else camera_fov)
 	var ideal_position: Vector3 = player_ship.global_position + _camera_offset(desired_distance)
 	var follow_blend: float = 1.0 - exp(-camera_follow_speed * delta)
 	camera.global_position = camera.global_position.lerp(ideal_position, follow_blend)
@@ -180,12 +187,23 @@ func _enter_combat(enemy: Node3D) -> void:
 	_combat_enemy = enemy
 	_combat_clear_timer = 0.0
 	_camera_idle_time = camera_return_delay
+	if player_ship and player_ship.has_method("set_combat_active"):
+		player_ship.call("set_combat_active", true)
 
 func _exit_combat() -> void:
 	_in_combat = false
 	_combat_enemy = null
 	_combat_clear_timer = 0.0
 	_camera_idle_time = camera_return_delay
+	if player_ship and player_ship.has_method("set_combat_active"):
+		player_ship.call("set_combat_active", false)
+
+func _is_travel_active() -> bool:
+	if not player_ship or not is_instance_valid(player_ship):
+		return false
+	if player_ship.has_method("is_travel_mode"):
+		return bool(player_ship.call("is_travel_mode"))
+	return false
 
 func is_in_combat() -> bool:
 	return _in_combat
