@@ -19,49 +19,16 @@ signal ship_level_upgraded(new_level: int, title: String)
 @export var roll_amount: float = 0.045
 @export var turn_bank_amount: float = 0.085
 
-@export_group("Combat Attributes")
+@export_group("Ship Durability")
 @export var max_health: float = 100.0
 @export var reload_time: float = 2.0
 @export var cannon_damage: float = 34.0
-@export var aim_assist_range: float = 42.0
-@export var aim_assist_degrees: float = 18.0
-@export var broadside_arc_degrees: float = 38.0
-@export var broadside_range: float = 46.0
-@export var target_snap_degrees: float = 11.0
-@export var target_marker_radius: float = 2.4
-@export var chase_reload_time: float = 1.35
-@export var chase_damage_multiplier: float = 0.55
-@export var brace_damage_multiplier: float = 0.45
-@export var ram_damage: float = 46.0
-@export var ram_min_speed_ratio: float = 0.55
-@export var ram_cooldown_time: float = 1.2
-@export var cannonball_scene: PackedScene = preload("res://scenes/combat/cannonball.tscn")
 
 var health: float = 100.0
 var current_forward_speed: float = 0.0
 var joystick_input: Vector2 = Vector2.ZERO
-var port_cooldown: float = 0.0
-var starboard_cooldown: float = 0.0
 var wave_time: float = 0.0
 var current_level: int = 1
-var camera_aim_direction: Vector3 = Vector3.FORWARD
-var is_aiming: bool = false
-var is_bracing: bool = false
-var ram_cooldown: float = 0.0
-var chase_cooldown: float = 0.0
-var last_aim_side: int = 1
-var aim_preview: Node3D = null
-var aim_preview_lane: MeshInstance3D = null
-var aim_preview_edge_left: MeshInstance3D = null
-var aim_preview_edge_right: MeshInstance3D = null
-var aim_impact_marker: MeshInstance3D = null
-var aim_cross_x: MeshInstance3D = null
-var aim_cross_z: MeshInstance3D = null
-var aim_target: Node3D = null
-var predicted_impact_point: Vector3 = Vector3.ZERO
-var aim_lane_material: StandardMaterial3D = null
-var aim_edge_material: StandardMaterial3D = null
-var aim_impact_material: StandardMaterial3D = null
 var world_health_anchor: Node3D = null
 var world_health_fill: MeshInstance3D = null
 
@@ -81,7 +48,6 @@ func _ready() -> void:
 	
 	_apply_ship_materials()
 	_setup_world_health_bar()
-	_setup_aim_preview()
 	_ensure_cannon_markers()
 	storage.storage_changed.connect(_on_storage_changed)
 	apply_ship_level(GameManager.current_ship_level)
@@ -97,8 +63,6 @@ func _physics_process(delta: float) -> void:
 	_handle_movement(delta)
 	_handle_wave_bobbing(delta)
 	_update_wake(delta)
-	_update_cooldowns(delta)
-	_update_aim_preview()
 	_keep_world_health_bar_readable()
 
 func _handle_movement(delta: float) -> void:
@@ -130,7 +94,6 @@ func _handle_movement(delta: float) -> void:
 	velocity = -transform.basis.z * current_forward_speed
 	velocity.y = 0.0
 	move_and_slide()
-	_handle_ram_collisions()
 
 func _handle_wave_bobbing(delta: float) -> void:
 	if not visuals:
@@ -159,210 +122,8 @@ func _update_wake(_delta: float) -> void:
 				c.a = lerp(0.15, 0.65, speed_ratio)
 				mat.albedo_color = c
 
-func _update_cooldowns(delta: float) -> void:
-	port_cooldown = max(0.0, port_cooldown - delta)
-	starboard_cooldown = max(0.0, starboard_cooldown - delta)
-	chase_cooldown = max(0.0, chase_cooldown - delta)
-	ram_cooldown = max(0.0, ram_cooldown - delta)
-
-func fire_left() -> bool:
-	if port_cooldown > 0.0:
-		return false
-	port_cooldown = reload_time
-	_fire_broadside(_resolve_broadside_direction(-1), port_cannons)
-	return true
-
-func fire_right() -> bool:
-	if starboard_cooldown > 0.0:
-		return false
-	starboard_cooldown = reload_time
-	_fire_broadside(_resolve_broadside_direction(1), starboard_cannons)
-	return true
-
-func fire_active_weapon() -> bool:
-	if not is_aiming:
-		return false
-
-	var mode: String = get_weapon_mode()
-	if mode == "PORT":
-		return fire_left()
-	if mode == "STARBOARD":
-		return fire_right()
-	if mode == "CHASE":
-		return fire_chase()
-	return false
-
-func fire_active_broadside() -> bool:
-	return fire_active_weapon()
-
-func fire_chase() -> bool:
-	if chase_cooldown > 0.0:
-		return false
-	chase_cooldown = chase_reload_time
-
-	var forward: Vector3 = -transform.basis.z
-	forward.y = 0.0
-	forward = forward.normalized()
-	var desired: Vector3 = camera_aim_direction if camera_aim_direction.length_squared() > 0.0001 else forward
-	var signed_angle: float = forward.signed_angle_to(desired, Vector3.UP)
-	var fire_direction: Vector3 = forward.rotated(Vector3.UP, clampf(signed_angle, -deg_to_rad(18.0), deg_to_rad(18.0))).normalized()
-
-	var right: Vector3 = transform.basis.x.normalized()
-	_spawn_single_ball_with_damage(global_position + forward * 2.7 + right * 0.42 + Vector3.UP * 0.95, fire_direction, cannon_damage * chase_damage_multiplier)
-	_spawn_single_ball_with_damage(global_position + forward * 2.7 - right * 0.42 + Vector3.UP * 0.95, fire_direction, cannon_damage * chase_damage_multiplier)
-	return true
-
-func get_weapon_mode() -> String:
-	var aim: Vector3 = camera_aim_direction
-	aim.y = 0.0
-	if aim.length_squared() < 0.0001:
-		return "NONE"
-	aim = aim.normalized()
-
-	var forward: Vector3 = -transform.basis.z
-	forward.y = 0.0
-	forward = forward.normalized()
-	var right: Vector3 = transform.basis.x
-	right.y = 0.0
-	right = right.normalized()
-
-	var forward_dot: float = aim.dot(forward)
-	var side_dot: float = aim.dot(right)
-
-	if forward_dot > 0.72:
-		return "CHASE"
-	if absf(side_dot) > 0.28:
-		last_aim_side = 1 if side_dot > 0.0 else -1
-		return "STARBOARD" if last_aim_side > 0 else "PORT"
-	return "NONE"
-
-func get_active_broadside_side() -> int:
-	var mode: String = get_weapon_mode()
-	if mode == "PORT":
-		return -1
-	if mode == "STARBOARD":
-		return 1
-	return last_aim_side
-
-func get_active_reload() -> float:
-	var mode: String = get_weapon_mode()
-	if mode == "CHASE":
-		return chase_cooldown
-	if mode == "PORT":
-		return port_cooldown
-	if mode == "STARBOARD":
-		return starboard_cooldown
-	return 0.0
-
-func set_camera_aim_direction(direction: Vector3) -> void:
-	camera_aim_direction = direction
-	camera_aim_direction.y = 0.0
-	if camera_aim_direction.length_squared() > 0.0001:
-		camera_aim_direction = camera_aim_direction.normalized()
-
-func set_aiming(active: bool) -> void:
-	is_aiming = active
-
-func set_bracing(active: bool) -> void:
-	is_bracing = active
-
-func _resolve_broadside_direction(side_sign: int) -> Vector3:
-	var side_direction: Vector3 = transform.basis.x * float(side_sign)
-	side_direction.y = 0.0
-	side_direction = side_direction.normalized()
-
-	var desired: Vector3 = camera_aim_direction
-	if desired.length_squared() <= 0.0001:
-		return side_direction
-	desired = desired.normalized()
-
-	var signed_angle: float = side_direction.signed_angle_to(desired, Vector3.UP)
-	var max_angle: float = deg_to_rad(broadside_arc_degrees)
-	return side_direction.rotated(Vector3.UP, clampf(signed_angle, -max_angle, max_angle)).normalized()
-
-func _fire_broadside(direction: Vector3, marker_parent: Node3D) -> void:
-	if not cannonball_scene:
-		return
-
-	var assisted_direction := _get_aim_assisted_direction(direction)
-	var spawn_points: Array[Node] = []
-	
-	if marker_parent:
-		for marker in marker_parent.get_children():
-			if marker is Node3D and marker.visible:
-				spawn_points.append(marker)
-
-	if spawn_points.is_empty():
-		_spawn_single_ball(global_position + assisted_direction * 1.6 + Vector3.UP * 0.7, assisted_direction)
-		return
-
-	for marker in spawn_points:
-		if marker is Node3D:
-			var spread_angle := randf_range(-0.035, 0.035)
-			var spread_dir := assisted_direction.rotated(Vector3.UP, spread_angle)
-			_spawn_single_ball(marker.global_position, spread_dir)
-
-func _get_aim_assisted_direction(base_direction: Vector3) -> Vector3:
-	var desired_direction: Vector3 = Vector3(base_direction.x, 0.0, base_direction.z).normalized()
-
-	# The shot follows the exact target indicator the player can see.
-	if is_aiming and aim_target and is_instance_valid(aim_target):
-		var target_direction: Vector3 = aim_target.global_position - global_position
-		target_direction.y = 0.0
-		if target_direction.length_squared() > 0.0001:
-			return target_direction.normalized()
-
-	var best_direction: Vector3 = desired_direction
-	var assist_angle: float = deg_to_rad(aim_assist_degrees)
-	for enemy in get_tree().get_nodes_in_group("enemies"):
-		if not enemy is Node3D or not is_instance_valid(enemy):
-			continue
-		var enemy_node := enemy as Node3D
-		var to_enemy: Vector3 = enemy_node.global_position - global_position
-		to_enemy.y = 0.0
-		var distance: float = to_enemy.length()
-		if distance <= 0.01 or distance > aim_assist_range:
-			continue
-		var candidate: Vector3 = to_enemy / distance
-		var angle: float = desired_direction.angle_to(candidate)
-		if angle < assist_angle:
-			assist_angle = angle
-			best_direction = candidate
-	return best_direction
-
-func _spawn_single_ball(pos: Vector3, dir: Vector3) -> void:
-	_spawn_single_ball_with_damage(pos, dir, cannon_damage)
-
-func _spawn_single_ball_with_damage(pos: Vector3, dir: Vector3, damage_value: float) -> void:
-	var ball := cannonball_scene.instantiate()
-	get_parent().add_child(ball)
-	ball.global_position = pos
-	if ball.has_method("setup"):
-		ball.setup(dir, damage_value, true)
-	_spawn_muzzle_flash(pos)
-
-func _spawn_muzzle_flash(pos: Vector3) -> void:
-	var flash := MeshInstance3D.new()
-	var sphere := SphereMesh.new()
-	sphere.radius = 0.32
-	sphere.height = 0.64
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(1.0, 0.72, 0.24, 0.9)
-	mat.emission_enabled = true
-	mat.emission = Color(1.0, 0.42, 0.08)
-	flash.mesh = sphere
-	flash.material_override = mat
-	flash.global_position = pos
-	get_parent().add_child(flash)
-
-	var tw := flash.create_tween()
-	tw.tween_property(flash, "scale", Vector3(2.4, 2.4, 2.4), 0.16)
-	tw.parallel().tween_property(mat, "albedo_color:a", 0.0, 0.18)
-	tw.tween_callback(flash.queue_free)
-
 func take_damage(amount: float) -> void:
-	var applied_damage: float = amount * (brace_damage_multiplier if is_bracing else 1.0)
-	health = max(0.0, health - applied_damage)
+	health = max(0.0, health - amount)
 	health_changed.emit(health, max_health)
 	GameManager.update_player_health(health, max_health)
 	_update_world_health_bar()
@@ -494,217 +255,6 @@ func _update_cannon_marker_visibility() -> void:
 			port_marker.visible = visible_now
 		if starboard_marker:
 			starboard_marker.visible = visible_now
-
-func _handle_ram_collisions() -> void:
-	if ram_cooldown > 0.0 or max_speed <= 0.0:
-		return
-
-	var speed_ratio: float = clampf(absf(current_forward_speed) / max_speed, 0.0, 1.0)
-	if speed_ratio < ram_min_speed_ratio:
-		return
-
-	for i in range(get_slide_collision_count()):
-		var collision := get_slide_collision(i)
-		if not collision:
-			continue
-		var collider: Object = collision.get_collider()
-		if collider is Node and (collider as Node).is_in_group("enemies"):
-			var enemy := collider as Node
-			if enemy.has_method("take_damage"):
-				var impact_damage: float = ram_damage * speed_ratio
-				enemy.call("take_damage", impact_damage)
-				ram_cooldown = ram_cooldown_time
-				take_damage(impact_damage * 0.16)
-				break
-
-func _setup_aim_preview() -> void:
-	if aim_preview or not get_parent():
-		return
-
-	aim_preview = Node3D.new()
-	aim_preview.name = "BroadsideAimPreview"
-	get_parent().add_child(aim_preview)
-
-	var lane_mesh := BoxMesh.new()
-	lane_mesh.size = Vector3(6.0, 0.035, broadside_range)
-	aim_lane_material = StandardMaterial3D.new()
-	aim_lane_material.albedo_color = Color(1.0, 0.78, 0.20, 0.24)
-	aim_lane_material.emission_enabled = true
-	aim_lane_material.emission = Color(0.8, 0.42, 0.05, 1.0)
-	aim_lane_material.emission_energy_multiplier = 1.25
-	aim_lane_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	aim_lane_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	aim_lane_material.no_depth_test = true
-
-	aim_preview_lane = MeshInstance3D.new()
-	aim_preview_lane.mesh = lane_mesh
-	aim_preview_lane.material_override = aim_lane_material
-	aim_preview.add_child(aim_preview_lane)
-
-	var edge_mesh := BoxMesh.new()
-	edge_mesh.size = Vector3(0.16, 0.055, broadside_range)
-	aim_edge_material = StandardMaterial3D.new()
-	aim_edge_material.albedo_color = Color(1.0, 0.88, 0.38, 0.92)
-	aim_edge_material.emission_enabled = true
-	aim_edge_material.emission = Color(0.85, 0.55, 0.08, 1.0)
-	aim_edge_material.emission_energy_multiplier = 1.4
-	aim_edge_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	aim_edge_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	aim_edge_material.no_depth_test = true
-
-	aim_preview_edge_left = MeshInstance3D.new()
-	aim_preview_edge_left.mesh = edge_mesh
-	aim_preview_edge_left.material_override = aim_edge_material
-	aim_preview_edge_left.position.x = -3.0
-	aim_preview.add_child(aim_preview_edge_left)
-
-	aim_preview_edge_right = MeshInstance3D.new()
-	aim_preview_edge_right.mesh = edge_mesh
-	aim_preview_edge_right.material_override = aim_edge_material
-	aim_preview_edge_right.position.x = 3.0
-	aim_preview.add_child(aim_preview_edge_right)
-
-	var impact_mesh := CylinderMesh.new()
-	impact_mesh.top_radius = target_marker_radius
-	impact_mesh.bottom_radius = target_marker_radius
-	impact_mesh.height = 0.055
-	impact_mesh.radial_segments = 40
-	aim_impact_material = StandardMaterial3D.new()
-	aim_impact_material.albedo_color = Color(1.0, 0.72, 0.16, 0.34)
-	aim_impact_material.emission_enabled = true
-	aim_impact_material.emission = Color(0.9, 0.35, 0.04, 1.0)
-	aim_impact_material.emission_energy_multiplier = 1.8
-	aim_impact_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	aim_impact_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	aim_impact_material.no_depth_test = true
-
-	aim_impact_marker = MeshInstance3D.new()
-	aim_impact_marker.mesh = impact_mesh
-	aim_impact_marker.material_override = aim_impact_material
-	get_parent().add_child(aim_impact_marker)
-
-	var cross_mesh_x := BoxMesh.new()
-	cross_mesh_x.size = Vector3(target_marker_radius * 2.8, 0.07, 0.16)
-	var cross_mesh_z := BoxMesh.new()
-	cross_mesh_z.size = Vector3(0.16, 0.07, target_marker_radius * 2.8)
-
-	aim_cross_x = MeshInstance3D.new()
-	aim_cross_x.mesh = cross_mesh_x
-	aim_cross_x.material_override = aim_edge_material
-	get_parent().add_child(aim_cross_x)
-
-	aim_cross_z = MeshInstance3D.new()
-	aim_cross_z.mesh = cross_mesh_z
-	aim_cross_z.material_override = aim_edge_material
-	get_parent().add_child(aim_cross_z)
-
-	aim_preview.visible = false
-	aim_impact_marker.visible = false
-	aim_cross_x.visible = false
-	aim_cross_z.visible = false
-
-func _update_aim_preview() -> void:
-	if not aim_preview or not is_instance_valid(aim_preview):
-		return
-
-	aim_preview.visible = false
-	aim_impact_marker.visible = false
-	aim_cross_x.visible = false
-	aim_cross_z.visible = false
-	aim_target = null
-
-	if not is_aiming:
-		return
-
-	var mode: String = get_weapon_mode()
-	if mode == "NONE":
-		return
-
-	var fire_direction: Vector3
-	var width_scale: float = 1.0
-	if mode == "CHASE":
-		fire_direction = -transform.basis.z
-		fire_direction.y = 0.0
-		fire_direction = fire_direction.normalized()
-		width_scale = 0.42
-	else:
-		var side: int = -1 if mode == "PORT" else 1
-		fire_direction = _resolve_broadside_direction(side)
-
-	aim_target = _find_aim_target(fire_direction)
-	var end_point: Vector3 = global_position + fire_direction * broadside_range
-	if aim_target and is_instance_valid(aim_target):
-		end_point = aim_target.global_position
-		end_point.y = 0.10
-
-	predicted_impact_point = end_point
-	var start_point: Vector3 = global_position + fire_direction * 2.2 + Vector3(0.0, 0.10, 0.0)
-	var lane_vector: Vector3 = end_point - start_point
-	lane_vector.y = 0.0
-	var lane_length: float = maxf(2.0, lane_vector.length())
-	var lane_direction: Vector3 = lane_vector.normalized() if lane_vector.length_squared() > 0.0001 else fire_direction
-
-	aim_preview.visible = true
-	aim_preview.scale = Vector3(width_scale, 1.0, lane_length / broadside_range)
-	aim_preview.global_position = start_point + lane_direction * (lane_length * 0.5)
-	aim_preview.global_rotation = Vector3(0.0, atan2(-lane_direction.x, -lane_direction.z), 0.0)
-
-	for marker in [aim_impact_marker, aim_cross_x, aim_cross_z]:
-		marker.visible = true
-		marker.global_position = end_point + Vector3(0.0, 0.035, 0.0)
-
-	var reload_value: float = get_active_reload()
-	var ready: bool = reload_value <= 0.0
-	var has_target: bool = aim_target != null and is_instance_valid(aim_target)
-
-	if aim_lane_material:
-		aim_lane_material.albedo_color = Color(0.28, 0.92, 0.40, 0.24) if has_target and ready else Color(1.0, 0.72, 0.16, 0.18 if ready else 0.08)
-	if aim_edge_material:
-		aim_edge_material.albedo_color = Color(0.35, 1.0, 0.48, 0.95) if has_target and ready else Color(1.0, 0.84, 0.30, 0.90 if ready else 0.38)
-	if aim_impact_material:
-		aim_impact_material.albedo_color = Color(0.20, 1.0, 0.36, 0.48) if has_target and ready else Color(1.0, 0.34, 0.12, 0.42 if ready else 0.18)
-
-func _find_aim_target(fire_direction: Vector3) -> Node3D:
-	var best_target: Node3D = null
-	var best_score: float = INF
-	var max_angle: float = deg_to_rad(target_snap_degrees)
-
-	for candidate in get_tree().get_nodes_in_group("enemies"):
-		if not candidate is Node3D or not is_instance_valid(candidate):
-			continue
-		var enemy := candidate as Node3D
-		var dead_value: Variant = enemy.get("is_dead")
-		if dead_value is bool and bool(dead_value):
-			continue
-
-		var to_enemy: Vector3 = enemy.global_position - global_position
-		to_enemy.y = 0.0
-		var distance: float = to_enemy.length()
-		if distance <= 0.01 or distance > broadside_range:
-			continue
-
-		var direction: Vector3 = to_enemy / distance
-		var angle: float = fire_direction.angle_to(direction)
-		if angle > max_angle:
-			continue
-
-		var score: float = angle * 120.0 + distance * 0.03
-		if score < best_score:
-			best_score = score
-			best_target = enemy
-
-	return best_target
-
-func has_aim_target() -> bool:
-	return aim_target != null and is_instance_valid(aim_target)
-
-func get_aim_target_distance() -> float:
-	if not has_aim_target():
-		return 0.0
-	return global_position.distance_to(aim_target.global_position)
-
-func get_predicted_impact_point() -> Vector3:
-	return predicted_impact_point
 
 func _setup_world_health_bar() -> void:
 	if world_health_anchor:
