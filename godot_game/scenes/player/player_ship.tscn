@@ -5,7 +5,7 @@
 [ext_resource type="PackedScene" path="res://assets/models/pirate_ship.glb" id="3_ship_model"]
 
 [sub_resource type="BoxShape3D" id="HullShape"]
-size = Vector3(3.25, 2.0, 6.95)
+size = Vector3(4.05, 2.5, 8.7)
 
 [sub_resource type="StandardMaterial3D" id="DarkHullMat"]
 albedo_color = Color(0.24, 0.13, 0.08, 1)
@@ -408,13 +408,13 @@ max_health = 100.0
 reload_time = 2.0
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-position = Vector3(0, 0.9, 0)
+position = Vector3(0, 1.1, 0)
 shape = SubResource("HullShape")
 
 [node name="Visuals" type="Node3D" parent="."]
 
 [node name="ShipModel" parent="Visuals" instance=ExtResource("3_ship_model")]
-scale = Vector3(0.56, 0.56, 0.56)
+scale = Vector3(0.70, 0.70, 0.70)
 
 [node name="BaseHull" type="Node3D" parent="Visuals"]
 visible = false
@@ -1246,13 +1246,13 @@ slot_type = 4
 slot_title = "Bow Ornament Socket"
 
 [node name="WakeLeft" type="MeshInstance3D" parent="Visuals"]
-position = Vector3(-0.75, 0.06, 3.85)
+position = Vector3(-0.94, 0.06, 4.8)
 rotation = Vector3(0, 0.18, 0)
 mesh = SubResource("WakeSlabMesh")
 material_override = SubResource("WakeMat")
 
 [node name="WakeRight" type="MeshInstance3D" parent="Visuals"]
-position = Vector3(0.75, 0.06, 3.85)
+position = Vector3(0.94, 0.06, 4.8)
 rotation = Vector3(0, -0.18, 0)
 mesh = SubResource("WakeSlabMesh")
 material_override = SubResource("WakeMat")
