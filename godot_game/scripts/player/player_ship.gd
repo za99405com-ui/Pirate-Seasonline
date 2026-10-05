@@ -27,6 +27,8 @@ signal ship_level_upgraded(new_level: int, title: String)
 @export var aim_assist_degrees: float = 18.0
 @export var broadside_arc_degrees: float = 38.0
 @export var broadside_range: float = 46.0
+@export var target_snap_degrees: float = 11.0
+@export var target_marker_radius: float = 2.4
 @export var chase_reload_time: float = 1.35
 @export var chase_damage_multiplier: float = 0.55
 @export var brace_damage_multiplier: float = 0.45
@@ -52,6 +54,14 @@ var aim_preview: Node3D = null
 var aim_preview_lane: MeshInstance3D = null
 var aim_preview_edge_left: MeshInstance3D = null
 var aim_preview_edge_right: MeshInstance3D = null
+var aim_impact_marker: MeshInstance3D = null
+var aim_cross_x: MeshInstance3D = null
+var aim_cross_z: MeshInstance3D = null
+var aim_target: Node3D = null
+var predicted_impact_point: Vector3 = Vector3.ZERO
+var aim_lane_material: StandardMaterial3D = null
+var aim_edge_material: StandardMaterial3D = null
+var aim_impact_material: StandardMaterial3D = null
 var world_health_anchor: Node3D = null
 var world_health_fill: MeshInstance3D = null
 
@@ -293,12 +303,17 @@ func _fire_broadside(direction: Vector3, marker_parent: Node3D) -> void:
 			_spawn_single_ball(marker.global_position, spread_dir)
 
 func _get_aim_assisted_direction(base_direction: Vector3) -> Vector3:
-	# The broadside direction is already clamped to the ship's firing arc.
-	# Aim assist may nudge toward an enemy, but it must never escape that arc.
 	var desired_direction: Vector3 = Vector3(base_direction.x, 0.0, base_direction.z).normalized()
-	var best_direction: Vector3 = desired_direction
-	var assist_angle: float = deg_to_rad(14.0 if is_aiming else aim_assist_degrees)
 
+	# The shot follows the exact target indicator the player can see.
+	if is_aiming and aim_target and is_instance_valid(aim_target):
+		var target_direction: Vector3 = aim_target.global_position - global_position
+		target_direction.y = 0.0
+		if target_direction.length_squared() > 0.0001:
+			return target_direction.normalized()
+
+	var best_direction: Vector3 = desired_direction
+	var assist_angle: float = deg_to_rad(aim_assist_degrees)
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if not enemy is Node3D or not is_instance_valid(enemy):
 			continue
@@ -313,7 +328,6 @@ func _get_aim_assisted_direction(base_direction: Vector3) -> Vector3:
 		if angle < assist_angle:
 			assist_angle = angle
 			best_direction = candidate
-
 	return best_direction
 
 func _spawn_single_ball(pos: Vector3, dir: Vector3) -> void:
@@ -512,50 +526,98 @@ func _setup_aim_preview() -> void:
 	get_parent().add_child(aim_preview)
 
 	var lane_mesh := BoxMesh.new()
-	lane_mesh.size = Vector3(5.0, 0.025, broadside_range)
-	var lane_mat := StandardMaterial3D.new()
-	lane_mat.albedo_color = Color(0.92, 0.78, 0.28, 0.12)
-	lane_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	lane_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	lane_mat.no_depth_test = true
+	lane_mesh.size = Vector3(6.0, 0.035, broadside_range)
+	aim_lane_material = StandardMaterial3D.new()
+	aim_lane_material.albedo_color = Color(1.0, 0.78, 0.20, 0.24)
+	aim_lane_material.emission_enabled = true
+	aim_lane_material.emission = Color(0.8, 0.42, 0.05, 1.0)
+	aim_lane_material.emission_energy_multiplier = 1.25
+	aim_lane_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	aim_lane_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	aim_lane_material.no_depth_test = true
 
 	aim_preview_lane = MeshInstance3D.new()
 	aim_preview_lane.mesh = lane_mesh
-	aim_preview_lane.material_override = lane_mat
+	aim_preview_lane.material_override = aim_lane_material
 	aim_preview.add_child(aim_preview_lane)
 
 	var edge_mesh := BoxMesh.new()
-	edge_mesh.size = Vector3(0.10, 0.04, broadside_range)
-	var edge_mat := StandardMaterial3D.new()
-	edge_mat.albedo_color = Color(1.0, 0.82, 0.30, 0.58)
-	edge_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	edge_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	edge_mat.no_depth_test = true
+	edge_mesh.size = Vector3(0.16, 0.055, broadside_range)
+	aim_edge_material = StandardMaterial3D.new()
+	aim_edge_material.albedo_color = Color(1.0, 0.88, 0.38, 0.92)
+	aim_edge_material.emission_enabled = true
+	aim_edge_material.emission = Color(0.85, 0.55, 0.08, 1.0)
+	aim_edge_material.emission_energy_multiplier = 1.4
+	aim_edge_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	aim_edge_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	aim_edge_material.no_depth_test = true
 
 	aim_preview_edge_left = MeshInstance3D.new()
 	aim_preview_edge_left.mesh = edge_mesh
-	aim_preview_edge_left.material_override = edge_mat
-	aim_preview_edge_left.position.x = -2.5
+	aim_preview_edge_left.material_override = aim_edge_material
+	aim_preview_edge_left.position.x = -3.0
 	aim_preview.add_child(aim_preview_edge_left)
 
 	aim_preview_edge_right = MeshInstance3D.new()
 	aim_preview_edge_right.mesh = edge_mesh
-	aim_preview_edge_right.material_override = edge_mat
-	aim_preview_edge_right.position.x = 2.5
+	aim_preview_edge_right.material_override = aim_edge_material
+	aim_preview_edge_right.position.x = 3.0
 	aim_preview.add_child(aim_preview_edge_right)
+
+	var impact_mesh := CylinderMesh.new()
+	impact_mesh.top_radius = target_marker_radius
+	impact_mesh.bottom_radius = target_marker_radius
+	impact_mesh.height = 0.055
+	impact_mesh.radial_segments = 40
+	aim_impact_material = StandardMaterial3D.new()
+	aim_impact_material.albedo_color = Color(1.0, 0.72, 0.16, 0.34)
+	aim_impact_material.emission_enabled = true
+	aim_impact_material.emission = Color(0.9, 0.35, 0.04, 1.0)
+	aim_impact_material.emission_energy_multiplier = 1.8
+	aim_impact_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	aim_impact_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	aim_impact_material.no_depth_test = true
+
+	aim_impact_marker = MeshInstance3D.new()
+	aim_impact_marker.mesh = impact_mesh
+	aim_impact_marker.material_override = aim_impact_material
+	get_parent().add_child(aim_impact_marker)
+
+	var cross_mesh_x := BoxMesh.new()
+	cross_mesh_x.size = Vector3(target_marker_radius * 2.8, 0.07, 0.16)
+	var cross_mesh_z := BoxMesh.new()
+	cross_mesh_z.size = Vector3(0.16, 0.07, target_marker_radius * 2.8)
+
+	aim_cross_x = MeshInstance3D.new()
+	aim_cross_x.mesh = cross_mesh_x
+	aim_cross_x.material_override = aim_edge_material
+	get_parent().add_child(aim_cross_x)
+
+	aim_cross_z = MeshInstance3D.new()
+	aim_cross_z.mesh = cross_mesh_z
+	aim_cross_z.material_override = aim_edge_material
+	get_parent().add_child(aim_cross_z)
+
 	aim_preview.visible = false
+	aim_impact_marker.visible = false
+	aim_cross_x.visible = false
+	aim_cross_z.visible = false
 
 func _update_aim_preview() -> void:
 	if not aim_preview or not is_instance_valid(aim_preview):
 		return
 
-	aim_preview.visible = is_aiming
+	aim_preview.visible = false
+	aim_impact_marker.visible = false
+	aim_cross_x.visible = false
+	aim_cross_z.visible = false
+	aim_target = null
+
 	if not is_aiming:
 		return
 
 	var mode: String = get_weapon_mode()
 	if mode == "NONE":
-		aim_preview.visible = false
 		return
 
 	var fire_direction: Vector3
@@ -564,23 +626,85 @@ func _update_aim_preview() -> void:
 		fire_direction = -transform.basis.z
 		fire_direction.y = 0.0
 		fire_direction = fire_direction.normalized()
-		width_scale = 0.34
+		width_scale = 0.42
 	else:
 		var side: int = -1 if mode == "PORT" else 1
 		fire_direction = _resolve_broadside_direction(side)
 
-	aim_preview.scale.x = width_scale
-	aim_preview.global_position = global_position + fire_direction * (broadside_range * 0.5) + Vector3(0.0, 0.10, 0.0)
-	aim_preview.global_rotation = Vector3(0.0, atan2(-fire_direction.x, -fire_direction.z), 0.0)
+	aim_target = _find_aim_target(fire_direction)
+	var end_point: Vector3 = global_position + fire_direction * broadside_range
+	if aim_target and is_instance_valid(aim_target):
+		end_point = aim_target.global_position
+		end_point.y = 0.10
+
+	predicted_impact_point = end_point
+	var start_point: Vector3 = global_position + fire_direction * 2.2 + Vector3(0.0, 0.10, 0.0)
+	var lane_vector: Vector3 = end_point - start_point
+	lane_vector.y = 0.0
+	var lane_length: float = maxf(2.0, lane_vector.length())
+	var lane_direction: Vector3 = lane_vector.normalized() if lane_vector.length_squared() > 0.0001 else fire_direction
+
+	aim_preview.visible = true
+	aim_preview.scale = Vector3(width_scale, 1.0, lane_length / broadside_range)
+	aim_preview.global_position = start_point + lane_direction * (lane_length * 0.5)
+	aim_preview.global_rotation = Vector3(0.0, atan2(-lane_direction.x, -lane_direction.z), 0.0)
+
+	for marker in [aim_impact_marker, aim_cross_x, aim_cross_z]:
+		marker.visible = true
+		marker.global_position = end_point + Vector3(0.0, 0.035, 0.0)
 
 	var reload_value: float = get_active_reload()
 	var ready: bool = reload_value <= 0.0
-	for mesh in [aim_preview_lane, aim_preview_edge_left, aim_preview_edge_right]:
-		if mesh and mesh.material_override is StandardMaterial3D:
-			var mat := mesh.material_override as StandardMaterial3D
-			var c: Color = mat.albedo_color
-			c.a = 0.18 if ready else 0.07
-			mat.albedo_color = c
+	var has_target: bool = aim_target != null and is_instance_valid(aim_target)
+
+	if aim_lane_material:
+		aim_lane_material.albedo_color = Color(0.28, 0.92, 0.40, 0.24) if has_target and ready else Color(1.0, 0.72, 0.16, 0.18 if ready else 0.08)
+	if aim_edge_material:
+		aim_edge_material.albedo_color = Color(0.35, 1.0, 0.48, 0.95) if has_target and ready else Color(1.0, 0.84, 0.30, 0.90 if ready else 0.38)
+	if aim_impact_material:
+		aim_impact_material.albedo_color = Color(0.20, 1.0, 0.36, 0.48) if has_target and ready else Color(1.0, 0.34, 0.12, 0.42 if ready else 0.18)
+
+func _find_aim_target(fire_direction: Vector3) -> Node3D:
+	var best_target: Node3D = null
+	var best_score: float = INF
+	var max_angle: float = deg_to_rad(target_snap_degrees)
+
+	for candidate in get_tree().get_nodes_in_group("enemies"):
+		if not candidate is Node3D or not is_instance_valid(candidate):
+			continue
+		var enemy := candidate as Node3D
+		var dead_value: Variant = enemy.get("is_dead")
+		if dead_value is bool and bool(dead_value):
+			continue
+
+		var to_enemy: Vector3 = enemy.global_position - global_position
+		to_enemy.y = 0.0
+		var distance: float = to_enemy.length()
+		if distance <= 0.01 or distance > broadside_range:
+			continue
+
+		var direction: Vector3 = to_enemy / distance
+		var angle: float = fire_direction.angle_to(direction)
+		if angle > max_angle:
+			continue
+
+		var score: float = angle * 120.0 + distance * 0.03
+		if score < best_score:
+			best_score = score
+			best_target = enemy
+
+	return best_target
+
+func has_aim_target() -> bool:
+	return aim_target != null and is_instance_valid(aim_target)
+
+func get_aim_target_distance() -> float:
+	if not has_aim_target():
+		return 0.0
+	return global_position.distance_to(aim_target.global_position)
+
+func get_predicted_impact_point() -> Vector3:
+	return predicted_impact_point
 
 func _setup_world_health_bar() -> void:
 	if world_health_anchor:
