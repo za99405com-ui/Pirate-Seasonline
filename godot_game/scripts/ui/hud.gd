@@ -25,7 +25,7 @@ var combat_label: Label = null
 
 var helm_root: Control = null
 var helm_background: Panel = null
-var helm_wheel: Label = null
+var helm_wheel: TextureRect = null
 var helm_status: Label = null
 var right_sailing_root: Control = null
 var sails_button: Button = null
@@ -36,6 +36,7 @@ var helm_mouse_active: bool = false
 var helm_last_angle: float = 0.0
 var helm_rotation: float = 0.0
 var helm_max_rotation: float = deg_to_rad(115.0)
+var helm_return_speed: float = deg_to_rad(145.0)
 
 func _ready() -> void:
 	world_controller = get_parent()
@@ -128,13 +129,11 @@ func _create_sailing_controls() -> void:
 	helm_background.add_theme_stylebox_override("panel", helm_style)
 	helm_root.add_child(helm_background)
 
-	helm_wheel = Label.new()
-	helm_wheel.text = "⎈"
-	helm_wheel.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	helm_wheel.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	helm_wheel = TextureRect.new()
+	helm_wheel.texture = load("res://assets/ui/ship_wheel.svg") as Texture2D
+	helm_wheel.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	helm_wheel.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	helm_wheel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	helm_wheel.add_theme_font_size_override("font_size", 128)
-	helm_wheel.add_theme_color_override("font_color", Color(0.82, 0.52, 0.22, 1.0))
 	helm_root.add_child(helm_wheel)
 
 	helm_status = Label.new()
@@ -156,7 +155,11 @@ func _create_sailing_controls() -> void:
 	controls_root.add_child(right_sailing_root)
 
 	sails_button = _make_action_button("SAILS\nFURLED")
-	anchor_button = _make_action_button("⚓  ANCHOR\nREADY")
+	anchor_button = _make_action_button("ANCHOR\nREADY")
+	anchor_button.icon = load("res://assets/ui/anchor.svg") as Texture2D
+	anchor_button.expand_icon = true
+	sails_button.icon = load("res://assets/ui/sail.svg") as Texture2D
+	sails_button.expand_icon = true
 	right_sailing_root.add_child(sails_button)
 	right_sailing_root.add_child(anchor_button)
 	sails_button.pressed.connect(_cycle_sails)
@@ -274,6 +277,9 @@ func _turn_helm_to_pointer(screen_position: Vector2) -> void:
 	helm_last_angle = new_angle
 	helm_rotation = clampf(helm_rotation + delta_angle, -helm_max_rotation, helm_max_rotation)
 
+	_apply_helm_rotation()
+
+func _apply_helm_rotation() -> void:
 	if helm_wheel:
 		helm_wheel.rotation = helm_rotation
 
@@ -327,11 +333,11 @@ func _update_sailing_buttons() -> void:
 		if player_ship.has_method("is_anchor_set"):
 			set_now = bool(player_ship.call("is_anchor_set"))
 		if not deployed:
-			anchor_button.text = "⚓  ANCHOR\nREADY"
+			anchor_button.text = "ANCHOR\nREADY"
 		elif set_now:
-			anchor_button.text = "⚓  ANCHOR\nSET"
+			anchor_button.text = "ANCHOR\nSET"
 		else:
-			anchor_button.text = "⚓  ANCHOR\nDROPPING..."
+			anchor_button.text = "ANCHOR\nDROPPING..."
 
 func _create_combat_indicator() -> void:
 	combat_panel = PanelContainer.new()
@@ -372,7 +378,12 @@ func set_player(player: Node3D) -> void:
 		_on_ship_storage_changed(player_ship.storage.used_storage, player_ship.storage.storage_capacity)
 	_update_sailing_buttons()
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	# Releasing the helm lets the wheel and rudder return to center smoothly.
+	if helm_touch_index == -1 and not helm_mouse_active and absf(helm_rotation) > 0.001:
+		helm_rotation = move_toward(helm_rotation, 0.0, helm_return_speed * delta)
+		_apply_helm_rotation()
+
 	if not player_ship or not is_instance_valid(player_ship):
 		return
 

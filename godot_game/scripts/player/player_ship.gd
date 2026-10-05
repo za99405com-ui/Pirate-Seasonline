@@ -23,6 +23,7 @@ signal ship_level_upgraded(new_level: int, title: String)
 @export var anchor_set_delay: float = 0.65
 @export var anchor_drag: float = 4.8
 @export var anchor_speed_limit_ratio: float = 0.42
+@export var sail_visual_response: float = 0.58
 
 @export_group("Travel Mode")
 @export var travel_entry_distance: float = 22.0
@@ -49,6 +50,7 @@ var current_forward_speed: float = 0.0
 var rudder_input: float = 0.0
 var sail_level: int = 0
 var sail_power: float = 0.0
+var sail_visual_progress: float = 0.0
 var smoothed_throttle: float = 0.0
 var smoothed_rudder: float = 0.0
 var anchor_deployed: bool = false
@@ -72,6 +74,7 @@ var travel_wind_material: StandardMaterial3D = null
 var travel_wind_time: float = 0.0
 var world_health_anchor: Node3D = null
 var world_health_fill: MeshInstance3D = null
+var ship_life_visuals: ShipLifeVisuals = null
 
 var storage: ShipStorage = ShipStorage.new()
 
@@ -88,6 +91,9 @@ func _ready() -> void:
 	GameManager.register_player(self)
 	
 	_apply_ship_materials()
+	ship_life_visuals = ShipLifeVisuals.new()
+	visuals.add_child(ship_life_visuals)
+	ship_life_visuals.setup(self)
 	_collect_travel_sails()
 	_setup_travel_wind()
 	travel_last_position = global_position
@@ -128,7 +134,9 @@ func toggle_anchor() -> void:
 	anchor_deployed = true
 	anchor_set = false
 	anchor_timer = 0.0
-	anchor_point = global_position
+	var drop_offset: Vector3 = -global_transform.basis.z * 2.8 - global_transform.basis.x * 1.0
+	anchor_point = global_position + drop_offset
+	anchor_point.y = 0.0
 	active_anchor_rope_length = anchor_rope_length + clampf(absf(current_forward_speed) * 0.18, 0.0, 3.0)
 	if travel_mode:
 		_set_travel_mode(false)
@@ -152,6 +160,8 @@ func _physics_process(delta: float) -> void:
 	_handle_movement(delta)
 	_update_travel_mode(delta)
 	_update_travel_effects(delta)
+	if ship_life_visuals:
+		ship_life_visuals.update_visuals(delta)
 	_handle_wave_bobbing(delta)
 	_update_wake(delta)
 	_keep_world_health_bar_readable()
@@ -300,19 +310,27 @@ func set_combat_active(active: bool) -> void:
 func _collect_travel_sails() -> void:
 	travel_sail_nodes.clear()
 	travel_sail_scales.clear()
-	var ship_model: Node = visuals.get_node_or_null("ShipModel") if visuals else null
-	if not ship_model:
+	if not visuals:
 		return
 
-	var stack: Array[Node] = [ship_model]
-	while not stack.is_empty():
-		var node: Node = stack.pop_back()
-		for child in node.get_children():
-			stack.append(child)
-		if node is MeshInstance3D and "sail" in node.name.to_lower():
-			var sail := node as Node3D
-			travel_sail_nodes.append(sail)
-			travel_sail_scales[sail.get_instance_id()] = sail.scale
+	var roots: Array[Node] = []
+	var ship_model: Node = visuals.get_node_or_null("ShipModel")
+	var starter_mast: Node = visuals.get_node_or_null("MastMain")
+	if ship_model:
+		roots.append(ship_model)
+	if starter_mast:
+		roots.append(starter_mast)
+
+	for root in roots:
+		var stack: Array[Node] = [root]
+		while not stack.is_empty():
+			var node: Node = stack.pop_back()
+			for child in node.get_children():
+				stack.append(child)
+			if node is MeshInstance3D and "sail" in node.name.to_lower():
+				var sail := node as Node3D
+				travel_sail_nodes.append(sail)
+				travel_sail_scales[sail.get_instance_id()] = sail.scale
 
 func _setup_travel_wind() -> void:
 	if travel_wind_root or not visuals:
@@ -351,16 +369,33 @@ func _update_travel_effects(delta: float) -> void:
 	var blend_rate: float = 1.0 / maxf(travel_transition_time, 0.05)
 	travel_blend = move_toward(travel_blend, target_blend, blend_rate * delta)
 
-	# Sail meshes visually unfurl with the control state, then billow a little in travel mode.
-	for sail in travel_sail_nodes:
+	# Sail opening has its own slower visual state so the crew appears to work the canvas.
+	var sail_visual_target: float = 0.0
+	match sail_level:
+		1:
+			sail_visual_target = 0.55
+		2:
+			sail_visual_target = 1.0
+		_:
+			sail_visual_target = 0.0
+	sail_visual_progress = move_toward(sail_visual_progress, sail_visual_target, sail_visual_response * delta)
+
+	# Open/close sails one after another instead of every sheet popping at once.
+	var sail_count: int = maxi(travel_sail_nodes.size(), 1)
+	for i in range(travel_sail_nodes.size()):
+		var sail := travel_sail_nodes[i]
 		if not is_instance_valid(sail):
 			continue
 		var base_scale_value: Variant = travel_sail_scales.get(sail.get_instance_id(), sail.scale)
 		var base_scale: Vector3 = base_scale_value if base_scale_value is Vector3 else sail.scale
-		var vertical_open: float = lerpf(0.42, 1.0, sail_power)
-		var travel_billow: float = lerpf(1.0, 1.10, travel_blend)
+		var order_offset: float = (float(i) / float(sail_count)) * 0.24
+		var local_open: float = clampf((sail_visual_progress - order_offset) / 0.76, 0.0, 1.0)
+		local_open = smoothstep(0.0, 1.0, local_open)
+		var vertical_open: float = lerpf(0.10, 1.0, local_open)
+		var width_open: float = lerpf(0.72, 1.0, local_open)
+		var travel_billow: float = lerpf(1.0, 1.08, travel_blend)
 		sail.scale = Vector3(
-			base_scale.x * travel_billow,
+			base_scale.x * width_open * travel_billow,
 			base_scale.y * vertical_open * travel_billow,
 			base_scale.z * travel_billow
 		)
@@ -438,6 +473,7 @@ func _destroy_ship() -> void:
 	current_forward_speed = 0.0
 	sail_level = 0
 	sail_power = 0.0
+	sail_visual_progress = 0.0
 	rudder_input = 0.0
 	smoothed_rudder = 0.0
 	anchor_deployed = false
@@ -488,6 +524,10 @@ func apply_ship_level(lvl: int) -> void:
 			var feature_id := child.name.to_snake_case()
 			child.visible = info.visible_parts.has(feature_id) or info.visible_parts.has(child.name)
 
+	_apply_level_visual_stage()
+	if ship_life_visuals:
+		ship_life_visuals.set_level(current_level)
+
 	# 4. Update mount slots
 	if mount_slots:
 		for slot in mount_slots.get_children():
@@ -500,6 +540,25 @@ func apply_ship_level(lvl: int) -> void:
 
 	ship_level_upgraded.emit(current_level, info.title)
 	_play_upgrade_celebration()
+
+func _apply_level_visual_stage() -> void:
+	if not visuals:
+		return
+
+	# Levels 1-2 use the lighter handmade hull. The imported ship becomes the Level 3 hull.
+	var starter_stage: bool = current_level <= 2
+	var ship_model := visuals.get_node_or_null("ShipModel") as Node3D
+	var base_hull := visuals.get_node_or_null("BaseHull") as Node3D
+	var mast_main := visuals.get_node_or_null("MastMain") as Node3D
+
+	if ship_model:
+		ship_model.visible = not starter_stage
+	if base_hull:
+		base_hull.visible = starter_stage
+	if mast_main:
+		mast_main.visible = starter_stage
+	if progressive_parts:
+		progressive_parts.visible = starter_stage
 
 func _play_upgrade_celebration() -> void:
 	if not visuals:
