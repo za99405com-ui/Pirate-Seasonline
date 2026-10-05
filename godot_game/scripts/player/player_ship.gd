@@ -75,6 +75,7 @@ var travel_wind_time: float = 0.0
 var world_health_anchor: Node3D = null
 var world_health_fill: MeshInstance3D = null
 var ship_life_visuals: ShipLifeVisuals = null
+var ragged_drifter_visual: RaggedDrifterVisual = null
 
 var storage: ShipStorage = ShipStorage.new()
 
@@ -94,6 +95,9 @@ func _ready() -> void:
 	ship_life_visuals = ShipLifeVisuals.new()
 	visuals.add_child(ship_life_visuals)
 	ship_life_visuals.setup(self)
+	ragged_drifter_visual = RaggedDrifterVisual.new()
+	visuals.add_child(ragged_drifter_visual)
+	ragged_drifter_visual.setup(self)
 	_collect_travel_sails()
 	_setup_travel_wind()
 	travel_last_position = global_position
@@ -162,6 +166,8 @@ func _physics_process(delta: float) -> void:
 	_update_travel_effects(delta)
 	if ship_life_visuals:
 		ship_life_visuals.update_visuals(delta)
+	if ragged_drifter_visual:
+		ragged_drifter_visual.update_visuals(delta, sail_visual_progress, combat_active, smoothed_rudder)
 	_handle_wave_bobbing(delta)
 	_update_wake(delta)
 	_keep_world_health_bar_readable()
@@ -545,20 +551,24 @@ func _apply_level_visual_stage() -> void:
 	if not visuals:
 		return
 
-	# Levels 1-2 use the lighter handmade hull. The imported ship becomes the Level 3 hull.
-	var starter_stage: bool = current_level <= 2
+	# Level 1 is our custom Ragged Drifter. Level 2 uses the starter hull.
+	# The imported detailed ship begins at Level 3.
+	var level_one: bool = current_level == 1
+	var level_two: bool = current_level == 2
 	var ship_model := visuals.get_node_or_null("ShipModel") as Node3D
 	var base_hull := visuals.get_node_or_null("BaseHull") as Node3D
 	var mast_main := visuals.get_node_or_null("MastMain") as Node3D
 
+	if ragged_drifter_visual:
+		ragged_drifter_visual.visible = level_one
 	if ship_model:
-		ship_model.visible = not starter_stage
+		ship_model.visible = current_level >= 3
 	if base_hull:
-		base_hull.visible = starter_stage
+		base_hull.visible = level_two
 	if mast_main:
-		mast_main.visible = starter_stage
+		mast_main.visible = level_two
 	if progressive_parts:
-		progressive_parts.visible = starter_stage
+		progressive_parts.visible = level_two
 
 func _play_upgrade_celebration() -> void:
 	if not visuals:
