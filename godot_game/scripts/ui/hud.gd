@@ -43,6 +43,8 @@ func _ready() -> void:
 	_apply_clean_layout()
 	_create_dpad()
 	_create_combat_indicator()
+	if not get_viewport().size_changed.is_connected(_layout_dpad):
+		get_viewport().size_changed.connect(_layout_dpad)
 
 	_on_gold_changed(GameManager.gold)
 	var current_info := ShipProgressionData.get_level_info(GameManager.current_ship_level)
@@ -323,6 +325,3 @@ func _show_notification(text: String) -> void:
 	tween.tween_interval(1.2)
 	tween.tween_property(notification_banner, "modulate:a", 0.0, 0.30)
 
-func _notification(what: int) -> void:
-	if what == NOTIFICATION_RESIZED and dpad_root:
-		_layout_dpad()
