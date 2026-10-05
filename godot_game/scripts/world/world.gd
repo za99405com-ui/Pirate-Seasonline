@@ -99,8 +99,8 @@ func _snap_camera() -> void:
 	if not player_ship or not camera:
 		return
 
-	var travel_active: bool = _is_travel_active()
-	var distance: float = combat_camera_distance if _in_combat else (travel_camera_distance if travel_active else camera_distance)
+	var travel_blend: float = _get_travel_blend()
+	var distance: float = combat_camera_distance if _in_combat else lerpf(camera_distance, travel_camera_distance, travel_blend)
 	camera.global_position = player_ship.global_position + _camera_offset(distance)
 	camera.look_at(player_ship.global_position + Vector3(0.0, 2.0, 0.0), Vector3.UP)
 
@@ -109,9 +109,9 @@ func _update_camera(delta: float) -> void:
 		return
 
 	var camera_is_held: bool = _camera_drag_touch != -1 or _mouse_orbiting
-	var travel_active: bool = _is_travel_active()
+	var travel_blend: float = _get_travel_blend()
 	var desired_yaw: float = player_ship.global_rotation.y
-	var desired_pitch: float = combat_camera_pitch if _in_combat else (travel_camera_pitch if travel_active else camera_pitch)
+	var desired_pitch: float = combat_camera_pitch if _in_combat else lerpf(camera_pitch, travel_camera_pitch, travel_blend)
 
 	if _in_combat and _combat_enemy and is_instance_valid(_combat_enemy):
 		var to_enemy: Vector3 = _combat_enemy.global_position - player_ship.global_position
@@ -134,8 +134,8 @@ func _update_camera(delta: float) -> void:
 			_camera_yaw = lerp_angle(_camera_yaw, desired_yaw, turn_blend)
 			_camera_pitch = lerpf(_camera_pitch, desired_pitch, turn_blend)
 
-	var desired_distance: float = combat_camera_distance if _in_combat else (travel_camera_distance if travel_active else camera_distance)
-	var desired_fov: float = combat_camera_fov if _in_combat else (travel_camera_fov if travel_active else camera_fov)
+	var desired_distance: float = combat_camera_distance if _in_combat else lerpf(camera_distance, travel_camera_distance, travel_blend)
+	var desired_fov: float = combat_camera_fov if _in_combat else lerpf(camera_fov, travel_camera_fov, travel_blend)
 	var ideal_position: Vector3 = player_ship.global_position + _camera_offset(desired_distance)
 	var follow_blend: float = 1.0 - exp(-camera_follow_speed * delta)
 	camera.global_position = camera.global_position.lerp(ideal_position, follow_blend)
@@ -198,12 +198,14 @@ func _exit_combat() -> void:
 	if player_ship and player_ship.has_method("set_combat_active"):
 		player_ship.call("set_combat_active", false)
 
-func _is_travel_active() -> bool:
+func _get_travel_blend() -> float:
 	if not player_ship or not is_instance_valid(player_ship):
-		return false
-	if player_ship.has_method("is_travel_mode"):
-		return bool(player_ship.call("is_travel_mode"))
-	return false
+		return 0.0
+	if player_ship.has_method("get_travel_blend"):
+		return clampf(float(player_ship.call("get_travel_blend")), 0.0, 1.0)
+	if player_ship.has_method("is_travel_mode") and bool(player_ship.call("is_travel_mode")):
+		return 1.0
+	return 0.0
 
 func is_in_combat() -> bool:
 	return _in_combat
