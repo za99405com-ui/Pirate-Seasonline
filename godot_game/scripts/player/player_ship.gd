@@ -27,6 +27,8 @@ signal ship_level_upgraded(new_level: int, title: String)
 @export var aim_assist_degrees: float = 18.0
 @export var broadside_arc_degrees: float = 38.0
 @export var broadside_range: float = 46.0
+@export var chase_reload_time: float = 1.35
+@export var chase_damage_multiplier: float = 0.55
 @export var brace_damage_multiplier: float = 0.45
 @export var ram_damage: float = 46.0
 @export var ram_min_speed_ratio: float = 0.55
@@ -40,10 +42,11 @@ var port_cooldown: float = 0.0
 var starboard_cooldown: float = 0.0
 var wave_time: float = 0.0
 var current_level: int = 1
-var combat_target: Node3D = null
-var manual_aim_direction: Vector3 = Vector3.ZERO
+var camera_aim_direction: Vector3 = Vector3.FORWARD
+var is_aiming: bool = false
 var is_bracing: bool = false
 var ram_cooldown: float = 0.0
+var chase_cooldown: float = 0.0
 var last_aim_side: int = 1
 var aim_preview: Node3D = null
 var aim_preview_lane: MeshInstance3D = null
@@ -149,6 +152,7 @@ func _update_wake(_delta: float) -> void:
 func _update_cooldowns(delta: float) -> void:
 	port_cooldown = max(0.0, port_cooldown - delta)
 	starboard_cooldown = max(0.0, starboard_cooldown - delta)
+	chase_cooldown = max(0.0, chase_cooldown - delta)
 	ram_cooldown = max(0.0, ram_cooldown - delta)
 
 func fire_left() -> bool:
@@ -165,21 +169,89 @@ func fire_right() -> bool:
 	_fire_broadside(_resolve_broadside_direction(1), starboard_cannons)
 	return true
 
-func fire_active_broadside() -> bool:
-	var side: int = get_active_broadside_side()
-	if side < 0:
+func fire_active_weapon() -> bool:
+	if not is_aiming:
+		return false
+
+	var mode: String = get_weapon_mode()
+	if mode == "PORT":
 		return fire_left()
-	return fire_right()
+	if mode == "STARBOARD":
+		return fire_right()
+	if mode == "CHASE":
+		return fire_chase()
+	return false
+
+func fire_active_broadside() -> bool:
+	return fire_active_weapon()
+
+func fire_chase() -> bool:
+	if chase_cooldown > 0.0:
+		return false
+	chase_cooldown = chase_reload_time
+
+	var forward: Vector3 = -transform.basis.z
+	forward.y = 0.0
+	forward = forward.normalized()
+	var desired: Vector3 = camera_aim_direction if camera_aim_direction.length_squared() > 0.0001 else forward
+	var signed_angle: float = forward.signed_angle_to(desired, Vector3.UP)
+	var fire_direction: Vector3 = forward.rotated(Vector3.UP, clampf(signed_angle, -deg_to_rad(18.0), deg_to_rad(18.0))).normalized()
+
+	var right: Vector3 = transform.basis.x.normalized()
+	_spawn_single_ball_with_damage(global_position + forward * 2.7 + right * 0.42 + Vector3.UP * 0.95, fire_direction, cannon_damage * chase_damage_multiplier)
+	_spawn_single_ball_with_damage(global_position + forward * 2.7 - right * 0.42 + Vector3.UP * 0.95, fire_direction, cannon_damage * chase_damage_multiplier)
+	return true
+
+func get_weapon_mode() -> String:
+	var aim: Vector3 = camera_aim_direction
+	aim.y = 0.0
+	if aim.length_squared() < 0.0001:
+		return "NONE"
+	aim = aim.normalized()
+
+	var forward: Vector3 = -transform.basis.z
+	forward.y = 0.0
+	forward = forward.normalized()
+	var right: Vector3 = transform.basis.x
+	right.y = 0.0
+	right = right.normalized()
+
+	var forward_dot: float = aim.dot(forward)
+	var side_dot: float = aim.dot(right)
+
+	if forward_dot > 0.72:
+		return "CHASE"
+	if absf(side_dot) > 0.28:
+		last_aim_side = 1 if side_dot > 0.0 else -1
+		return "STARBOARD" if last_aim_side > 0 else "PORT"
+	return "NONE"
 
 func get_active_broadside_side() -> int:
-	if manual_aim_direction.length_squared() > 0.0001:
-		var side_dot: float = manual_aim_direction.dot(transform.basis.x)
-		if absf(side_dot) > 0.20:
-			last_aim_side = 1 if side_dot > 0.0 else -1
+	var mode: String = get_weapon_mode()
+	if mode == "PORT":
+		return -1
+	if mode == "STARBOARD":
+		return 1
 	return last_aim_side
 
 func get_active_reload() -> float:
-	return port_cooldown if get_active_broadside_side() < 0 else starboard_cooldown
+	var mode: String = get_weapon_mode()
+	if mode == "CHASE":
+		return chase_cooldown
+	if mode == "PORT":
+		return port_cooldown
+	if mode == "STARBOARD":
+		return starboard_cooldown
+	return 0.0
+
+func set_camera_aim_direction(direction: Vector3) -> void:
+	camera_aim_direction = direction
+	camera_aim_direction.y = 0.0
+	if camera_aim_direction.length_squared() > 0.0001:
+		camera_aim_direction = camera_aim_direction.normalized()
+
+func set_aiming(active: bool) -> void:
+	is_aiming = active
 
 func set_bracing(active: bool) -> void:
 	is_bracing = active
@@ -189,10 +261,11 @@ func _resolve_broadside_direction(side_sign: int) -> Vector3:
 	side_direction.y = 0.0
 	side_direction = side_direction.normalized()
 
-	if manual_aim_direction.length_squared() <= 0.0001:
+	var desired: Vector3 = camera_aim_direction
+	if desired.length_squared() <= 0.0001:
 		return side_direction
+	desired = desired.normalized()
 
-	var desired: Vector3 = manual_aim_direction.normalized()
 	var signed_angle: float = side_direction.signed_angle_to(desired, Vector3.UP)
 	var max_angle: float = deg_to_rad(broadside_arc_degrees)
 	return side_direction.rotated(Vector3.UP, clampf(signed_angle, -max_angle, max_angle)).normalized()
@@ -224,7 +297,7 @@ func _get_aim_assisted_direction(base_direction: Vector3) -> Vector3:
 	# Aim assist may nudge toward an enemy, but it must never escape that arc.
 	var desired_direction: Vector3 = Vector3(base_direction.x, 0.0, base_direction.z).normalized()
 	var best_direction: Vector3 = desired_direction
-	var assist_angle: float = deg_to_rad(14.0 if manual_aim_direction.length_squared() > 0.0001 else aim_assist_degrees)
+	var assist_angle: float = deg_to_rad(14.0 if is_aiming else aim_assist_degrees)
 
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if not enemy is Node3D or not is_instance_valid(enemy):
@@ -244,11 +317,14 @@ func _get_aim_assisted_direction(base_direction: Vector3) -> Vector3:
 	return best_direction
 
 func _spawn_single_ball(pos: Vector3, dir: Vector3) -> void:
+	_spawn_single_ball_with_damage(pos, dir, cannon_damage)
+
+func _spawn_single_ball_with_damage(pos: Vector3, dir: Vector3, damage_value: float) -> void:
 	var ball := cannonball_scene.instantiate()
 	get_parent().add_child(ball)
 	ball.global_position = pos
 	if ball.has_method("setup"):
-		ball.setup(dir, cannon_damage, true)
+		ball.setup(dir, damage_value, true)
 	_spawn_muzzle_flash(pos)
 
 func _spawn_muzzle_flash(pos: Vector3) -> void:
@@ -359,20 +435,6 @@ func _play_upgrade_celebration() -> void:
 
 func _on_storage_changed(used: int, capacity: int) -> void:
 	GameManager.update_storage(used, capacity)
-
-func set_combat_target(target: Node3D) -> void:
-	combat_target = target
-
-func set_aim_direction(direction: Vector3) -> void:
-	manual_aim_direction = direction
-	manual_aim_direction.y = 0.0
-	if manual_aim_direction.length_squared() > 0.0001:
-		manual_aim_direction = manual_aim_direction.normalized()
-		var side_dot: float = manual_aim_direction.dot(transform.basis.x)
-		if absf(side_dot) > 0.20:
-			last_aim_side = 1 if side_dot > 0.0 else -1
-	else:
-		manual_aim_direction = Vector3.ZERO
 
 func get_cannons_per_side() -> int:
 	if current_level >= 15:
@@ -487,15 +549,38 @@ func _update_aim_preview() -> void:
 	if not aim_preview or not is_instance_valid(aim_preview):
 		return
 
-	var aiming: bool = manual_aim_direction.length_squared() > 0.0001
-	aim_preview.visible = aiming
-	if not aiming:
+	aim_preview.visible = is_aiming
+	if not is_aiming:
 		return
 
-	var side: int = get_active_broadside_side()
-	var fire_direction: Vector3 = _resolve_broadside_direction(side)
+	var mode: String = get_weapon_mode()
+	if mode == "NONE":
+		aim_preview.visible = false
+		return
+
+	var fire_direction: Vector3
+	var width_scale: float = 1.0
+	if mode == "CHASE":
+		fire_direction = -transform.basis.z
+		fire_direction.y = 0.0
+		fire_direction = fire_direction.normalized()
+		width_scale = 0.34
+	else:
+		var side: int = -1 if mode == "PORT" else 1
+		fire_direction = _resolve_broadside_direction(side)
+
+	aim_preview.scale.x = width_scale
 	aim_preview.global_position = global_position + fire_direction * (broadside_range * 0.5) + Vector3(0.0, 0.10, 0.0)
 	aim_preview.global_rotation = Vector3(0.0, atan2(-fire_direction.x, -fire_direction.z), 0.0)
+
+	var reload_value: float = get_active_reload()
+	var ready: bool = reload_value <= 0.0
+	for mesh in [aim_preview_lane, aim_preview_edge_left, aim_preview_edge_right]:
+		if mesh and mesh.material_override is StandardMaterial3D:
+			var mat := mesh.material_override as StandardMaterial3D
+			var c: Color = mat.albedo_color
+			c.a = 0.18 if ready else 0.07
+			mat.albedo_color = c
 
 func _setup_world_health_bar() -> void:
 	if world_health_anchor:
