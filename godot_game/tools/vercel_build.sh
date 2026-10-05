@@ -5,11 +5,11 @@ GODOT_VERSION="4.3"
 GODOT_RELEASE="4.3-stable"
 GODOT_BIN="./Godot_v${GODOT_RELEASE}_linux.x86_64"
 
-wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_RELEASE}_linux.x86_64.zip"
+curl -L --fail --silent --show-error -o "Godot_v${GODOT_RELEASE}_linux.x86_64.zip" "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_RELEASE}_linux.x86_64.zip"
 unzip -q "Godot_v${GODOT_RELEASE}_linux.x86_64.zip"
 chmod +x "$GODOT_BIN"
 
-wget -q "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_RELEASE}_export_templates.tpz"
+curl -L --fail --silent --show-error -o "Godot_v${GODOT_RELEASE}_export_templates.tpz" "https://github.com/godotengine/godot/releases/download/${GODOT_RELEASE}/Godot_v${GODOT_RELEASE}_export_templates.tpz"
 mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
 unzip -q "Godot_v${GODOT_RELEASE}_export_templates.tpz"
 mv templates/* "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
