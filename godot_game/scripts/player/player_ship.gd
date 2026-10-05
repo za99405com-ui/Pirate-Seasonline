@@ -6,15 +6,23 @@ signal ship_level_upgraded(new_level: int, title: String)
 
 @export_group("Ship Movement")
 @export var max_speed: float = 14.5
-@export var reverse_speed_ratio: float = 0.28
 @export var acceleration: float = 4.2
-@export var deceleration: float = 2.6
+@export var deceleration: float = 1.35
 @export var turn_speed: float = 1.45
-@export var water_drag: float = 0.35
-@export var throttle_response: float = 2.6
-@export var rudder_response: float = 3.8
+@export var water_drag: float = 0.42
+@export var rudder_response: float = 3.4
 @export var steering_min_speed_ratio: float = 0.08
 @export var steering_full_speed_ratio: float = 0.48
+
+@export_group("Sailing Controls")
+@export var half_sail_power: float = 0.52
+@export var sail_response: float = 1.15
+@export var full_sail_turn_factor: float = 0.66
+@export var furled_turn_factor: float = 1.15
+@export var anchor_rope_length: float = 9.0
+@export var anchor_set_delay: float = 0.65
+@export var anchor_drag: float = 4.8
+@export var anchor_speed_limit_ratio: float = 0.42
 
 @export_group("Travel Mode")
 @export var travel_entry_distance: float = 22.0
@@ -38,9 +46,16 @@ signal ship_level_upgraded(new_level: int, title: String)
 
 var health: float = 100.0
 var current_forward_speed: float = 0.0
-var joystick_input: Vector2 = Vector2.ZERO
+var rudder_input: float = 0.0
+var sail_level: int = 0
+var sail_power: float = 0.0
 var smoothed_throttle: float = 0.0
 var smoothed_rudder: float = 0.0
+var anchor_deployed: bool = false
+var anchor_set: bool = false
+var anchor_point: Vector3 = Vector3.ZERO
+var anchor_timer: float = 0.0
+var active_anchor_rope_length: float = 9.0
 var wave_time: float = 0.0
 var current_level: int = 1
 var travel_mode: bool = false
@@ -85,9 +100,53 @@ func _ready() -> void:
 	GameManager.update_player_health(health, max_health)
 	_update_world_health_bar()
 
+func set_rudder_input(value: float) -> void:
+	rudder_input = clampf(value, -1.0, 1.0)
+
+func get_rudder_input() -> float:
+	return rudder_input
+
+func set_sail_level(level: int) -> void:
+	sail_level = clampi(level, 0, 2)
+	if sail_level < 2 and travel_mode:
+		_set_travel_mode(false)
+		_reset_travel_progress()
+
+func get_sail_level() -> int:
+	return sail_level
+
+func get_sail_power() -> float:
+	return sail_power
+
+func toggle_anchor() -> void:
+	if anchor_deployed:
+		anchor_deployed = false
+		anchor_set = false
+		anchor_timer = 0.0
+		return
+
+	anchor_deployed = true
+	anchor_set = false
+	anchor_timer = 0.0
+	anchor_point = global_position
+	active_anchor_rope_length = anchor_rope_length + clampf(absf(current_forward_speed) * 0.18, 0.0, 3.0)
+	if travel_mode:
+		_set_travel_mode(false)
+		_reset_travel_progress()
+
+func is_anchor_deployed() -> bool:
+	return anchor_deployed
+
+func is_anchor_set() -> bool:
+	return anchor_set
+
+# Legacy bridge kept so old scenes/tests do not break while the D-pad is removed.
 func set_joystick_input(vec: Vector2) -> void:
-	# Keep throttle and rudder independent so forward/back does not weaken while steering.
-	joystick_input = Vector2(clampf(vec.x, -1.0, 1.0), clampf(vec.y, -1.0, 1.0))
+	set_rudder_input(vec.x)
+	if vec.y < -0.35:
+		set_sail_level(2)
+	elif vec.y > 0.35:
+		set_sail_level(0)
 
 func _physics_process(delta: float) -> void:
 	_handle_movement(delta)
@@ -98,48 +157,76 @@ func _physics_process(delta: float) -> void:
 	_keep_world_health_bar_readable()
 
 func _handle_movement(delta: float) -> void:
-	var raw_rudder: float = joystick_input.x
-	var raw_throttle: float = -joystick_input.y
+	var target_sail_power: float = 0.0
+	match sail_level:
+		1:
+			target_sail_power = half_sail_power
+		2:
+			target_sail_power = 1.0
+		_:
+			target_sail_power = 0.0
 
-	if absf(raw_throttle) < 0.12:
-		raw_throttle = 0.0
-	if absf(raw_rudder) < 0.10:
-		raw_rudder = 0.0
-
-	# Smooth the controls so the ship has weight instead of reacting like a car.
-	smoothed_throttle = move_toward(smoothed_throttle, raw_throttle, throttle_response * delta)
-	smoothed_rudder = move_toward(smoothed_rudder, raw_rudder, rudder_response * delta)
+	# Sails gain/lose drive progressively; changing sail state never teleports speed.
+	sail_power = move_toward(sail_power, target_sail_power, sail_response * delta)
+	smoothed_throttle = sail_power
+	smoothed_rudder = move_toward(smoothed_rudder, rudder_input, rudder_response * delta)
 
 	var active_max_speed: float = lerpf(max_speed, max_speed * travel_speed_multiplier, travel_blend)
-	var target_speed: float = 0.0
-	if smoothed_throttle >= 0.0:
-		target_speed = smoothed_throttle * active_max_speed
-	else:
-		target_speed = smoothed_throttle * max_speed * reverse_speed_ratio
+	var target_speed: float = sail_power * active_max_speed
 
-	var rate: float = acceleration if absf(target_speed) > absf(current_forward_speed) else deceleration
-	current_forward_speed = move_toward(current_forward_speed, target_speed, rate * delta)
+	# When the anchor bites, it resists the ship but does not stop it instantly.
+	if anchor_deployed and anchor_set:
+		target_speed = minf(target_speed, max_speed * anchor_speed_limit_ratio * maxf(sail_power, 0.35))
 
-	# Releasing the stick does not stop the ship instantly; water drag bleeds speed slowly.
-	if absf(raw_throttle) < 0.01 and absf(smoothed_throttle) < 0.04:
+	var speed_rate: float = acceleration * lerpf(0.68, 1.0, sail_power) if target_speed > current_forward_speed else deceleration
+	if anchor_deployed and anchor_set and target_speed < current_forward_speed:
+		speed_rate = maxf(speed_rate, anchor_drag)
+	current_forward_speed = move_toward(current_forward_speed, target_speed, speed_rate * delta)
+
+	if sail_power < 0.03 and not anchor_deployed:
 		current_forward_speed = move_toward(current_forward_speed, 0.0, water_drag * delta)
 
-	var steering_speed_base: float = lerpf(max_speed, max_speed * travel_speed_multiplier, travel_blend)
-	var speed_ratio: float = clampf(absf(current_forward_speed) / maxf(steering_speed_base, 0.01), 0.0, 1.0)
-
-	# The rudder needs water flow. At a standstill the ship cannot spin around its center.
+	var steering_speed_base: float = maxf(active_max_speed, 0.01)
+	var speed_ratio: float = clampf(absf(current_forward_speed) / steering_speed_base, 0.0, 1.0)
 	var steering_authority: float = smoothstep(steering_min_speed_ratio, steering_full_speed_ratio, speed_ratio)
 
-	# Side-only input gives the strongest rudder and therefore a tighter turning circle.
-	# Forward/back + side keeps more longitudinal drive, producing a wider sailing arc.
-	var throttle_load: float = clampf(absf(smoothed_throttle), 0.0, 1.0)
-	var turn_arc_factor: float = lerpf(1.25, 0.64, throttle_load)
+	# More canvas = more momentum = wider turn. Furled sails make a tighter coasting arc.
+	var turn_arc_factor: float = lerpf(furled_turn_factor, full_sail_turn_factor, sail_power)
 	if absf(smoothed_rudder) > 0.01 and steering_authority > 0.001:
 		rotation.y -= smoothed_rudder * turn_speed * steering_authority * turn_arc_factor * delta
 
-	velocity = -transform.basis.z * current_forward_speed
-	velocity.y = 0.0
+	var desired_velocity: Vector3 = -transform.basis.z * current_forward_speed
+	desired_velocity.y = 0.0
+
+	if anchor_deployed:
+		anchor_timer += delta
+		if not anchor_set and anchor_timer >= anchor_set_delay:
+			anchor_set = true
+
+		if anchor_set:
+			var to_ship: Vector3 = global_position - anchor_point
+			to_ship.y = 0.0
+			var distance_from_anchor: float = to_ship.length()
+			if distance_from_anchor > 0.001:
+				var radial: Vector3 = to_ship / distance_from_anchor
+				# Once the rope is nearly taut, remove outward velocity but keep tangent velocity.
+				# With sails still open this makes the ship orbit the anchor instead of freezing.
+				if distance_from_anchor >= active_anchor_rope_length * 0.90:
+					var outward_speed: float = desired_velocity.dot(radial)
+					if outward_speed > 0.0:
+						desired_velocity -= radial * outward_speed
+
+	velocity = desired_velocity
 	move_and_slide()
+
+	if anchor_deployed and anchor_set:
+		var after_offset: Vector3 = global_position - anchor_point
+		after_offset.y = 0.0
+		var after_distance: float = after_offset.length()
+		if after_distance > active_anchor_rope_length and after_distance > 0.001:
+			var corrected: Vector3 = anchor_point + after_offset.normalized() * active_anchor_rope_length
+			global_position.x = corrected.x
+			global_position.z = corrected.z
 
 func _update_travel_mode(_delta: float) -> void:
 	var current_position := global_position
@@ -149,14 +236,13 @@ func _update_travel_mode(_delta: float) -> void:
 	).length()
 	travel_last_position = current_position
 
-	var raw_throttle: float = -joystick_input.y
-	var raw_rudder: float = joystick_input.x
+	var raw_rudder: float = rudder_input
 	var forward: Vector3 = -transform.basis.z
 	forward.y = 0.0
 	if forward.length_squared() > 0.0001:
 		forward = forward.normalized()
 
-	if combat_active or raw_throttle < 0.45:
+	if combat_active or anchor_deployed or sail_level < 2:
 		_reset_travel_progress()
 		if travel_mode:
 			_set_travel_mode(false)
@@ -170,7 +256,7 @@ func _update_travel_mode(_delta: float) -> void:
 		return
 
 	var speed_ratio: float = absf(current_forward_speed) / maxf(max_speed, 0.01)
-	if raw_throttle < 0.78 or speed_ratio < travel_min_speed_ratio:
+	if sail_power < 0.86 or speed_ratio < travel_min_speed_ratio:
 		return
 
 	if travel_reference_heading.length_squared() < 0.0001:
@@ -223,7 +309,7 @@ func _collect_travel_sails() -> void:
 		var node: Node = stack.pop_back()
 		for child in node.get_children():
 			stack.append(child)
-		if node is Node3D and "sail" in node.name.to_lower():
+		if node is MeshInstance3D and "sail" in node.name.to_lower():
 			var sail := node as Node3D
 			travel_sail_nodes.append(sail)
 			travel_sail_scales[sail.get_instance_id()] = sail.scale
@@ -265,13 +351,19 @@ func _update_travel_effects(delta: float) -> void:
 	var blend_rate: float = 1.0 / maxf(travel_transition_time, 0.05)
 	travel_blend = move_toward(travel_blend, target_blend, blend_rate * delta)
 
-	# Open the sails progressively instead of popping instantly.
+	# Sail meshes visually unfurl with the control state, then billow a little in travel mode.
 	for sail in travel_sail_nodes:
 		if not is_instance_valid(sail):
 			continue
 		var base_scale_value: Variant = travel_sail_scales.get(sail.get_instance_id(), sail.scale)
 		var base_scale: Vector3 = base_scale_value if base_scale_value is Vector3 else sail.scale
-		sail.scale = base_scale * lerpf(1.0, 1.13, travel_blend)
+		var vertical_open: float = lerpf(0.42, 1.0, sail_power)
+		var travel_billow: float = lerpf(1.0, 1.10, travel_blend)
+		sail.scale = Vector3(
+			base_scale.x * travel_billow,
+			base_scale.y * vertical_open * travel_billow,
+			base_scale.z * travel_billow
+		)
 
 	if not travel_wind_root:
 		return
@@ -344,6 +436,12 @@ func _flash_hit() -> void:
 func _destroy_ship() -> void:
 	ship_destroyed.emit()
 	current_forward_speed = 0.0
+	sail_level = 0
+	sail_power = 0.0
+	rudder_input = 0.0
+	smoothed_rudder = 0.0
+	anchor_deployed = false
+	anchor_set = false
 	visible = false
 	set_physics_process(false)
 
