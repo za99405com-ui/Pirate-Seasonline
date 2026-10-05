@@ -17,6 +17,7 @@ var player_ref: Node3D = null
 var is_dead: bool = false
 var wave_time: float = 0.0
 var patrol_phase: float = 0.0
+var target_marker: MeshInstance3D = null
 
 @onready var visuals: Node3D = $Visuals
 @onready var health_bar_anchor: Node3D = $HealthBarAnchor
@@ -28,6 +29,7 @@ func _ready() -> void:
 	add_to_group("enemies")
 	health = max_health
 	patrol_phase = randf() * TAU
+	_create_target_marker()
 	_update_health_bar()
 
 func _physics_process(delta: float) -> void:
@@ -123,8 +125,41 @@ func _update_wake() -> void:
 			wake.scale.z = lerp(0.3, 1.0, ratio)
 
 func _keep_health_bar_readable() -> void:
-	if health_bar_anchor:
-		health_bar_anchor.global_rotation = Vector3.ZERO
+	if not health_bar_anchor:
+		return
+	var active_camera: Camera3D = get_viewport().get_camera_3d()
+	if active_camera:
+		health_bar_anchor.look_at(active_camera.global_position, Vector3.UP)
+
+func set_targeted(active: bool) -> void:
+	if target_marker:
+		target_marker.visible = active
+
+func _create_target_marker() -> void:
+	if target_marker:
+		return
+
+	target_marker = MeshInstance3D.new()
+	target_marker.name = "TargetMarker"
+	var marker_mesh := CylinderMesh.new()
+	marker_mesh.top_radius = 2.8
+	marker_mesh.bottom_radius = 2.8
+	marker_mesh.height = 0.035
+	marker_mesh.radial_segments = 32
+
+	var marker_mat := StandardMaterial3D.new()
+	marker_mat.albedo_color = Color(0.95, 0.16, 0.08, 0.18)
+	marker_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	marker_mat.emission_enabled = true
+	marker_mat.emission = Color(0.65, 0.05, 0.02, 1.0)
+	marker_mat.emission_energy_multiplier = 1.8
+	marker_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+	target_marker.mesh = marker_mesh
+	target_marker.material_override = marker_mat
+	target_marker.position = Vector3(0.0, 0.08, 0.0)
+	target_marker.visible = false
+	add_child(target_marker)
 
 func take_damage(amount: float) -> void:
 	if is_dead:
@@ -178,6 +213,8 @@ func _sink_and_drop_loot() -> void:
 
 	if health_bar_anchor:
 		health_bar_anchor.visible = false
+	if target_marker:
+		target_marker.visible = false
 
 	var tw := create_tween()
 	tw.tween_property(visuals, "position:y", -3.2, 1.25)
