@@ -34,6 +34,9 @@ var port_cooldown: float = 0.0
 var starboard_cooldown: float = 0.0
 var wave_time: float = 0.0
 var current_level: int = 1
+var combat_target: Node3D = null
+var world_health_anchor: Node3D = null
+var world_health_fill: MeshInstance3D = null
 
 var storage: ShipStorage = ShipStorage.new()
 
@@ -50,11 +53,14 @@ func _ready() -> void:
 	GameManager.register_player(self)
 	
 	_apply_ship_materials()
+	_setup_world_health_bar()
+	_ensure_cannon_markers()
 	storage.storage_changed.connect(_on_storage_changed)
 	apply_ship_level(GameManager.current_ship_level)
 	
 	health = max_health
 	GameManager.update_player_health(health, max_health)
+	_update_world_health_bar()
 
 func set_joystick_input(vec: Vector2) -> void:
 	joystick_input = vec.limit_length(1.0)
@@ -64,6 +70,7 @@ func _physics_process(delta: float) -> void:
 	_handle_wave_bobbing(delta)
 	_update_wake(delta)
 	_update_cooldowns(delta)
+	_keep_world_health_bar_readable()
 
 func _handle_movement(delta: float) -> void:
 	var rudder := joystick_input.x
@@ -165,18 +172,29 @@ func _fire_broadside(direction: Vector3, marker_parent: Node3D) -> void:
 func _get_aim_assisted_direction(base_direction: Vector3) -> Vector3:
 	var flat_base := Vector3(base_direction.x, 0.0, base_direction.z).normalized()
 	var best_direction := flat_base
-	var best_angle := deg_to_rad(aim_assist_degrees)
+	var best_angle: float = deg_to_rad(aim_assist_degrees)
+
+	if combat_target and is_instance_valid(combat_target):
+		var locked_vector: Vector3 = combat_target.global_position - global_position
+		locked_vector.y = 0.0
+		var locked_distance: float = locked_vector.length()
+		if locked_distance > 0.01 and locked_distance <= aim_assist_range * 1.4:
+			var locked_direction: Vector3 = locked_vector / locked_distance
+			var locked_angle: float = flat_base.angle_to(locked_direction)
+			if locked_angle <= deg_to_rad(52.0):
+				return locked_direction
 
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if not enemy is Node3D or not is_instance_valid(enemy):
 			continue
-		var to_enemy: Vector3 = enemy.global_position - global_position
+		var enemy_node := enemy as Node3D
+		var to_enemy: Vector3 = enemy_node.global_position - global_position
 		to_enemy.y = 0.0
-		var distance := to_enemy.length()
+		var distance: float = to_enemy.length()
 		if distance <= 0.01 or distance > aim_assist_range:
 			continue
-		var candidate := to_enemy / distance
-		var angle := flat_base.angle_to(candidate)
+		var candidate: Vector3 = to_enemy / distance
+		var angle: float = flat_base.angle_to(candidate)
 		if angle < best_angle:
 			best_angle = angle
 			best_direction = candidate
@@ -214,6 +232,7 @@ func take_damage(amount: float) -> void:
 	health = max(0.0, health - amount)
 	health_changed.emit(health, max_health)
 	GameManager.update_player_health(health, max_health)
+	_update_world_health_bar()
 	_flash_hit()
 	if health <= 0.0:
 		_destroy_ship()
@@ -237,6 +256,7 @@ func _destroy_ship() -> void:
 	rotation = Vector3.ZERO
 	health = max_health
 	GameManager.update_player_health(health, max_health)
+	_update_world_health_bar()
 	visible = true
 	set_physics_process(true)
 
@@ -266,6 +286,7 @@ func apply_ship_level(lvl: int) -> void:
 	storage.configure_for_level(current_level, info.storage_capacity)
 	GameManager.update_storage(storage.used_storage, storage.storage_capacity)
 	GameManager.update_player_health(health, max_health)
+	_update_world_health_bar()
 
 	# 3. Update progressive visual parts
 	if progressive_parts:
@@ -280,11 +301,8 @@ func apply_ship_level(lvl: int) -> void:
 				var is_slot_open := info.unlocked_slots.has(slot.slot_id) or info.unlocked_slots.has(slot.name.to_snake_case())
 				slot.set_unlocked(is_slot_open)
 
-	# 5. Enable dual cannon firing markers at Level 8+
-	if port_cannons and port_cannons.has_node("PortMarker2"):
-		port_cannons.get_node("PortMarker2").visible = (current_level >= 8)
-	if starboard_cannons and starboard_cannons.has_node("StarboardMarker2"):
-		starboard_cannons.get_node("StarboardMarker2").visible = (current_level >= 8)
+	# 5. Cannon count is a real functional upgrade: 1 / 2 / 3 / 4 guns per side.
+	_update_cannon_marker_visibility()
 
 	ship_level_upgraded.emit(current_level, info.title)
 	_play_upgrade_celebration()
@@ -298,6 +316,111 @@ func _play_upgrade_celebration() -> void:
 
 func _on_storage_changed(used: int, capacity: int) -> void:
 	GameManager.update_storage(used, capacity)
+
+func set_combat_target(target: Node3D) -> void:
+	combat_target = target
+
+func get_cannons_per_side() -> int:
+	if current_level >= 15:
+		return 4
+	if current_level >= 12:
+		return 3
+	if current_level >= 8:
+		return 2
+	return 1
+
+func _ensure_cannon_markers() -> void:
+	var z_positions: Array[float] = [-1.8, -0.6, 0.6, 1.8]
+	for i in range(4):
+		var marker_index: int = i + 1
+		var port_name := "PortMarker%d" % marker_index
+		var starboard_name := "StarboardMarker%d" % marker_index
+		var port_marker := port_cannons.get_node_or_null(port_name) as Marker3D
+		var starboard_marker := starboard_cannons.get_node_or_null(starboard_name) as Marker3D
+
+		if not port_marker:
+			port_marker = Marker3D.new()
+			port_marker.name = port_name
+			port_cannons.add_child(port_marker)
+
+		if not starboard_marker:
+			starboard_marker = Marker3D.new()
+			starboard_marker.name = starboard_name
+			starboard_cannons.add_child(starboard_marker)
+
+		port_marker.position = Vector3(-1.55, 0.90, z_positions[i])
+		starboard_marker.position = Vector3(1.55, 0.90, z_positions[i])
+
+	_update_cannon_marker_visibility()
+
+func _update_cannon_marker_visibility() -> void:
+	var active_count: int = get_cannons_per_side()
+	for i in range(4):
+		var marker_index: int = i + 1
+		var visible_now: bool = marker_index <= active_count
+		var port_marker := port_cannons.get_node_or_null("PortMarker%d" % marker_index) as Node3D
+		var starboard_marker := starboard_cannons.get_node_or_null("StarboardMarker%d" % marker_index) as Node3D
+		if port_marker:
+			port_marker.visible = visible_now
+		if starboard_marker:
+			starboard_marker.visible = visible_now
+
+func _setup_world_health_bar() -> void:
+	if world_health_anchor:
+		return
+
+	world_health_anchor = Node3D.new()
+	world_health_anchor.name = "WorldHealthBar"
+	world_health_anchor.position = Vector3(0.0, 6.8, 0.0)
+	add_child(world_health_anchor)
+
+	var background := MeshInstance3D.new()
+	var background_mesh := BoxMesh.new()
+	background_mesh.size = Vector3(3.2, 0.28, 0.08)
+	var background_mat := StandardMaterial3D.new()
+	background_mat.albedo_color = Color(0.03, 0.04, 0.05, 0.88)
+	background_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	background_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	background.mesh = background_mesh
+	background.material_override = background_mat
+	world_health_anchor.add_child(background)
+
+	world_health_fill = MeshInstance3D.new()
+	var fill_mesh := BoxMesh.new()
+	fill_mesh.size = Vector3(3.0, 0.20, 0.10)
+	var fill_mat := StandardMaterial3D.new()
+	fill_mat.albedo_color = Color(0.18, 0.88, 0.33, 1.0)
+	fill_mat.emission_enabled = true
+	fill_mat.emission = Color(0.05, 0.28, 0.08, 1.0)
+	fill_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	world_health_fill.mesh = fill_mesh
+	world_health_fill.material_override = fill_mat
+	world_health_fill.position.z = -0.05
+	world_health_anchor.add_child(world_health_fill)
+
+	_update_world_health_bar()
+
+func _keep_world_health_bar_readable() -> void:
+	if not world_health_anchor:
+		return
+	var active_camera: Camera3D = get_viewport().get_camera_3d()
+	if active_camera:
+		world_health_anchor.look_at(active_camera.global_position, Vector3.UP)
+
+func _update_world_health_bar() -> void:
+	if not world_health_fill or max_health <= 0.0:
+		return
+	var frac: float = clampf(health / max_health, 0.0, 1.0)
+	world_health_fill.scale.x = maxf(0.02, frac)
+	world_health_fill.position.x = -(1.0 - frac) * 1.5
+	var mat := world_health_fill.material_override as StandardMaterial3D
+	if mat:
+		if frac > 0.5:
+			mat.albedo_color = Color(0.18, 0.88, 0.33, 1.0)
+		elif frac > 0.25:
+			mat.albedo_color = Color(1.0, 0.72, 0.12, 1.0)
+		else:
+			mat.albedo_color = Color(0.95, 0.16, 0.12, 1.0)
 
 func _apply_ship_materials() -> void:
 	var ship_model_node: Node = visuals.get_node_or_null("ShipModel") if visuals else null
