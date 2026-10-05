@@ -10,12 +10,13 @@ extends Node3D
 @export var camera_pitch: float = 0.52
 @export var camera_fov: float = 58.0
 @export var camera_follow_speed: float = 5.2
-@export var camera_turn_speed: float = 2.35
+@export var camera_turn_speed: float = 1.90
 @export var camera_orbit_sensitivity: float = 0.0062
-@export var camera_orbit_smooth_speed: float = 14.0
-@export var camera_min_pitch: float = 0.26
-@export var camera_max_pitch: float = 1.02
-@export var camera_return_delay: float = 0.65
+@export var camera_vertical_sensitivity: float = 0.0036
+@export var camera_orbit_smooth_speed: float = 12.0
+@export var camera_min_pitch: float = 0.34
+@export var camera_max_pitch: float = 0.78
+@export var camera_return_delay: float = 0.75
 
 @export_group("Travel Camera")
 @export var travel_camera_distance: float = 36.5
@@ -96,7 +97,7 @@ func _rotate_camera(relative: Vector2) -> void:
 	# Free 360-degree orbit around the ship. Horizontal yaw is intentionally not clamped.
 	_camera_target_yaw -= relative.x * camera_orbit_sensitivity
 	_camera_target_pitch = clampf(
-		_camera_target_pitch + relative.y * camera_orbit_sensitivity,
+		_camera_target_pitch + relative.y * camera_vertical_sensitivity,
 		camera_min_pitch,
 		camera_max_pitch
 	)
