@@ -11,6 +11,7 @@ extends CanvasLayer
 @onready var fire_left_btn: Button = $Controls/RightControls/FireLeftButton
 @onready var fire_right_btn: Button = $Controls/RightControls/FireRightButton
 @onready var joystick: Control = $Controls/LeftControls/VirtualJoystick
+@onready var controls_root: Control = $Controls
 @onready var ship_level_label: Label = $TopBar/ShipInfoContainer/ShipLevelLabel
 @onready var cargo_label: Label = $TopBar/ShipInfoContainer/CargoLabel
 @onready var upgrade_btn: Button = $TopBar/UpgradeButton
@@ -21,6 +22,15 @@ var player_ship: Node3D = null
 var world_controller: Node = null
 var combat_panel: PanelContainer = null
 var combat_label: Label = null
+var dpad_root: Control = null
+var dpad_up: Button = null
+var dpad_down: Button = null
+var dpad_left: Button = null
+var dpad_right: Button = null
+var dpad_up_held: bool = false
+var dpad_down_held: bool = false
+var dpad_left_held: bool = false
+var dpad_right_held: bool = false
 
 func _ready() -> void:
 	world_controller = get_parent()
@@ -31,6 +41,7 @@ func _ready() -> void:
 	GameManager.ship_storage_changed.connect(_on_ship_storage_changed)
 
 	_apply_clean_layout()
+	_create_dpad()
 	_create_combat_indicator()
 
 	_on_gold_changed(GameManager.gold)
@@ -50,6 +61,9 @@ func _apply_clean_layout() -> void:
 		cargo_label.visible = false
 	if gold_title:
 		gold_title.visible = false
+	if joystick:
+		joystick.visible = false
+		joystick.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	# No aiming / firing UI in this clean foundation build.
 	# We are validating sailing, automatic combat detection and combat camera first.
@@ -74,6 +88,122 @@ func _apply_clean_layout() -> void:
 		speed_panel.offset_top = -58.0
 		speed_panel.offset_right = 64.0
 		speed_panel.offset_bottom = -18.0
+
+func _create_dpad() -> void:
+	if not controls_root:
+		return
+
+	dpad_root = Control.new()
+	dpad_root.name = "DPad"
+	dpad_root.anchor_left = 0.0
+	dpad_root.anchor_top = 1.0
+	dpad_root.anchor_right = 0.0
+	dpad_root.anchor_bottom = 1.0
+	dpad_root.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	controls_root.add_child(dpad_root)
+
+	dpad_up = _make_dpad_button("▲")
+	dpad_down = _make_dpad_button("▼")
+	dpad_left = _make_dpad_button("◀")
+	dpad_right = _make_dpad_button("▶")
+
+	for button in [dpad_up, dpad_down, dpad_left, dpad_right]:
+		dpad_root.add_child(button)
+
+	dpad_up.button_down.connect(_set_dpad_up.bind(true))
+	dpad_up.button_up.connect(_set_dpad_up.bind(false))
+	dpad_down.button_down.connect(_set_dpad_down.bind(true))
+	dpad_down.button_up.connect(_set_dpad_down.bind(false))
+	dpad_left.button_down.connect(_set_dpad_left.bind(true))
+	dpad_left.button_up.connect(_set_dpad_left.bind(false))
+	dpad_right.button_down.connect(_set_dpad_right.bind(true))
+	dpad_right.button_up.connect(_set_dpad_right.bind(false))
+
+	_layout_dpad()
+
+func _make_dpad_button(symbol: String) -> Button:
+	var button := Button.new()
+	button.text = symbol
+	button.focus_mode = Control.FOCUS_NONE
+	button.add_theme_font_size_override("font_size", 30)
+
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.025, 0.07, 0.12, 0.78)
+	normal.border_width_left = 2
+	normal.border_width_top = 2
+	normal.border_width_right = 2
+	normal.border_width_bottom = 2
+	normal.border_color = Color(0.86, 0.68, 0.24, 0.82)
+	normal.corner_radius_top_left = 18
+	normal.corner_radius_top_right = 18
+	normal.corner_radius_bottom_left = 18
+	normal.corner_radius_bottom_right = 18
+
+	var pressed := normal.duplicate() as StyleBoxFlat
+	pressed.bg_color = Color(0.24, 0.15, 0.045, 0.96)
+	pressed.border_color = Color(1.0, 0.86, 0.34, 1.0)
+
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", normal)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_color_override("font_color", Color(1.0, 0.92, 0.60, 1.0))
+	return button
+
+func _layout_dpad() -> void:
+	if not dpad_root:
+		return
+
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	var dpad_size: float = clampf(viewport_size.y * 0.36, 230.0, 300.0)
+	var button_size: float = dpad_size * 0.36
+	var center: float = dpad_size * 0.5
+	var half_button: float = button_size * 0.5
+	var edge: float = 18.0
+
+	dpad_root.offset_left = edge
+	dpad_root.offset_top = -dpad_size - edge
+	dpad_root.offset_right = edge + dpad_size
+	dpad_root.offset_bottom = -edge
+
+	_place_dpad_button(dpad_up, center - half_button, 0.0, button_size)
+	_place_dpad_button(dpad_down, center - half_button, dpad_size - button_size, button_size)
+	_place_dpad_button(dpad_left, 0.0, center - half_button, button_size)
+	_place_dpad_button(dpad_right, dpad_size - button_size, center - half_button, button_size)
+
+func _place_dpad_button(button: Button, x: float, y: float, button_size: float) -> void:
+	if not button:
+		return
+	button.position = Vector2(x, y)
+	button.size = Vector2(button_size, button_size)
+	button.custom_minimum_size = Vector2(button_size, button_size)
+
+func _set_dpad_up(active: bool) -> void:
+	dpad_up_held = active
+	_send_dpad_vector()
+
+func _set_dpad_down(active: bool) -> void:
+	dpad_down_held = active
+	_send_dpad_vector()
+
+func _set_dpad_left(active: bool) -> void:
+	dpad_left_held = active
+	_send_dpad_vector()
+
+func _set_dpad_right(active: bool) -> void:
+	dpad_right_held = active
+	_send_dpad_vector()
+
+func _send_dpad_vector() -> void:
+	if not player_ship or not is_instance_valid(player_ship) or not player_ship.has_method("set_joystick_input"):
+		return
+
+	var x: float = float(int(dpad_right_held) - int(dpad_left_held))
+	var y: float = float(int(dpad_down_held) - int(dpad_up_held))
+	var input_vector := Vector2(x, y)
+	if input_vector.length() > 1.0:
+		input_vector = input_vector.normalized()
+
+	player_ship.call("set_joystick_input", input_vector)
 
 func _create_combat_indicator() -> void:
 	combat_panel = PanelContainer.new()
@@ -110,9 +240,6 @@ func _create_combat_indicator() -> void:
 
 func set_player(player: Node3D) -> void:
 	player_ship = player
-	if joystick and player_ship and player_ship.has_method("set_joystick_input"):
-		joystick.joystick_moved.connect(player_ship.set_joystick_input)
-
 	if player_ship and "storage" in player_ship and player_ship.storage:
 		_on_ship_storage_changed(player_ship.storage.used_storage, player_ship.storage.storage_capacity)
 
@@ -195,3 +322,7 @@ func _show_notification(text: String) -> void:
 	tween.tween_property(notification_banner, "modulate:a", 1.0, 0.20)
 	tween.tween_interval(1.2)
 	tween.tween_property(notification_banner, "modulate:a", 0.0, 0.30)
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED and dpad_root:
+		_layout_dpad()
