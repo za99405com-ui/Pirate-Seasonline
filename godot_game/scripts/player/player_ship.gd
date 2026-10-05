@@ -11,6 +11,8 @@ signal ship_level_upgraded(new_level: int, title: String)
 @export var deceleration: float = 2.6
 @export var turn_speed: float = 1.45
 @export var water_drag: float = 0.35
+@export var throttle_response: float = 2.6
+@export var rudder_response: float = 3.8
 
 @export_group("Wave Simulation")
 @export var bobbing_speed: float = 1.7
@@ -27,6 +29,8 @@ signal ship_level_upgraded(new_level: int, title: String)
 var health: float = 100.0
 var current_forward_speed: float = 0.0
 var joystick_input: Vector2 = Vector2.ZERO
+var smoothed_throttle: float = 0.0
+var smoothed_rudder: float = 0.0
 var wave_time: float = 0.0
 var current_level: int = 1
 var world_health_anchor: Node3D = null
@@ -66,30 +70,35 @@ func _physics_process(delta: float) -> void:
 	_keep_world_health_bar_readable()
 
 func _handle_movement(delta: float) -> void:
-	var rudder := joystick_input.x
-	var throttle := -joystick_input.y
+	var raw_rudder: float = joystick_input.x
+	var raw_throttle: float = -joystick_input.y
 
-	if abs(throttle) < 0.12:
-		throttle = 0.0
-	if abs(rudder) < 0.10:
-		rudder = 0.0
+	if absf(raw_throttle) < 0.12:
+		raw_throttle = 0.0
+	if absf(raw_rudder) < 0.10:
+		raw_rudder = 0.0
 
-	var target_speed := 0.0
-	if throttle >= 0.0:
-		target_speed = throttle * max_speed
+	# Smooth the controls so the ship has weight instead of reacting like a car.
+	smoothed_throttle = move_toward(smoothed_throttle, raw_throttle, throttle_response * delta)
+	smoothed_rudder = move_toward(smoothed_rudder, raw_rudder, rudder_response * delta)
+
+	var target_speed: float = 0.0
+	if smoothed_throttle >= 0.0:
+		target_speed = smoothed_throttle * max_speed
 	else:
-		target_speed = throttle * max_speed * reverse_speed_ratio
+		target_speed = smoothed_throttle * max_speed * reverse_speed_ratio
 
-	var rate := acceleration if abs(target_speed) > abs(current_forward_speed) else deceleration
+	var rate: float = acceleration if absf(target_speed) > absf(current_forward_speed) else deceleration
 	current_forward_speed = move_toward(current_forward_speed, target_speed, rate * delta)
 
-	if throttle == 0.0:
+	# Releasing the stick does not stop the ship instantly; water drag bleeds speed slowly.
+	if absf(raw_throttle) < 0.01 and absf(smoothed_throttle) < 0.04:
 		current_forward_speed = move_toward(current_forward_speed, 0.0, water_drag * delta)
 
 	var speed_ratio: float = clampf(absf(current_forward_speed) / max_speed, 0.0, 1.0)
-	var steering_authority: float = lerpf(0.28, 1.0, speed_ratio)
-	if abs(rudder) > 0.0:
-		rotation.y -= rudder * turn_speed * steering_authority * delta
+	var steering_authority: float = lerpf(0.18, 1.0, speed_ratio)
+	if absf(smoothed_rudder) > 0.01:
+		rotation.y -= smoothed_rudder * turn_speed * steering_authority * delta
 
 	velocity = -transform.basis.z * current_forward_speed
 	velocity.y = 0.0
@@ -106,7 +115,7 @@ func _handle_wave_bobbing(delta: float) -> void:
 
 	var pitch: float = cos(wave_time * 0.82) * pitch_amount
 	var roll: float = sin(wave_time * 1.07) * roll_amount
-	roll += -joystick_input.x * turn_bank_amount * speed_ratio
+	roll += -smoothed_rudder * turn_bank_amount * speed_ratio
 	visuals.rotation = Vector3(pitch, 0.0, roll)
 
 func _update_wake(_delta: float) -> void:
