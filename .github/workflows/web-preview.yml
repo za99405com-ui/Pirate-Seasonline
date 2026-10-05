@@ -11,6 +11,7 @@ permissions:
   id-token: write
 
 concurrency:
+  # Keep only the newest preview deployment.
   group: godot-web-preview
   cancel-in-progress: true
 
