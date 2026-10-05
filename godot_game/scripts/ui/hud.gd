@@ -31,6 +31,8 @@ var dpad_up_held: bool = false
 var dpad_down_held: bool = false
 var dpad_left_held: bool = false
 var dpad_right_held: bool = false
+var dpad_touches: Dictionary = {}
+var mouse_dpad_direction: String = ""
 
 func _ready() -> void:
 	world_controller = get_parent()
@@ -112,14 +114,9 @@ func _create_dpad() -> void:
 	for button in [dpad_up, dpad_down, dpad_left, dpad_right]:
 		dpad_root.add_child(button)
 
-	dpad_up.button_down.connect(_set_dpad_up.bind(true))
-	dpad_up.button_up.connect(_set_dpad_up.bind(false))
-	dpad_down.button_down.connect(_set_dpad_down.bind(true))
-	dpad_down.button_up.connect(_set_dpad_down.bind(false))
-	dpad_left.button_down.connect(_set_dpad_left.bind(true))
-	dpad_left.button_up.connect(_set_dpad_left.bind(false))
-	dpad_right.button_down.connect(_set_dpad_right.bind(true))
-	dpad_right.button_up.connect(_set_dpad_right.bind(false))
+	for button in [dpad_up, dpad_down, dpad_left, dpad_right]:
+		button.toggle_mode = true
+		button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	_layout_dpad()
 
@@ -179,20 +176,81 @@ func _place_dpad_button(button: Button, x: float, y: float, button_size: float) 
 	button.size = Vector2(button_size, button_size)
 	button.custom_minimum_size = Vector2(button_size, button_size)
 
-func _set_dpad_up(active: bool) -> void:
-	dpad_up_held = active
-	_send_dpad_vector()
+func _input(event: InputEvent) -> void:
+	# One Control tracks every finger, so UP+LEFT / UP+RIGHT works reliably on mobile.
+	if event is InputEventScreenTouch:
+		var touch := event as InputEventScreenTouch
+		if touch.pressed:
+			var direction := _dpad_direction_at(touch.position)
+			if not direction.is_empty():
+				dpad_touches[touch.index] = direction
+				get_viewport().set_input_as_handled()
+		else:
+			if dpad_touches.has(touch.index):
+				dpad_touches.erase(touch.index)
+				get_viewport().set_input_as_handled()
+		_refresh_dpad_state()
+	elif event is InputEventScreenDrag:
+		var drag := event as InputEventScreenDrag
+		if dpad_touches.has(drag.index):
+			var direction := _dpad_direction_at(drag.position)
+			if direction.is_empty():
+				dpad_touches.erase(drag.index)
+			else:
+				dpad_touches[drag.index] = direction
+			get_viewport().set_input_as_handled()
+			_refresh_dpad_state()
+	elif event is InputEventMouseButton:
+		var mouse := event as InputEventMouseButton
+		if mouse.button_index == MOUSE_BUTTON_LEFT:
+			mouse_dpad_direction = _dpad_direction_at(mouse.position) if mouse.pressed else ""
+			_refresh_dpad_state()
 
-func _set_dpad_down(active: bool) -> void:
-	dpad_down_held = active
-	_send_dpad_vector()
+func _dpad_direction_at(screen_position: Vector2) -> String:
+	if not dpad_root or not dpad_root.visible:
+		return ""
+	if dpad_up and dpad_up.get_global_rect().has_point(screen_position):
+		return "up"
+	if dpad_down and dpad_down.get_global_rect().has_point(screen_position):
+		return "down"
+	if dpad_left and dpad_left.get_global_rect().has_point(screen_position):
+		return "left"
+	if dpad_right and dpad_right.get_global_rect().has_point(screen_position):
+		return "right"
+	return ""
 
-func _set_dpad_left(active: bool) -> void:
-	dpad_left_held = active
-	_send_dpad_vector()
+func _refresh_dpad_state() -> void:
+	dpad_up_held = false
+	dpad_down_held = false
+	dpad_left_held = false
+	dpad_right_held = false
 
-func _set_dpad_right(active: bool) -> void:
-	dpad_right_held = active
+	var directions: Array[String] = []
+	for value in dpad_touches.values():
+		directions.append(String(value))
+	if not mouse_dpad_direction.is_empty():
+		directions.append(mouse_dpad_direction)
+
+	for direction in directions:
+		match direction:
+			"up":
+				dpad_up_held = true
+			"down":
+				dpad_down_held = true
+			"left":
+				dpad_left_held = true
+			"right":
+				dpad_right_held = true
+
+	if dpad_up:
+		dpad_up.set_pressed_no_signal(dpad_up_held)
+	if dpad_down:
+		dpad_down.set_pressed_no_signal(dpad_down_held)
+	if dpad_left:
+		dpad_left.set_pressed_no_signal(dpad_left_held)
+	if dpad_right:
+		dpad_right.set_pressed_no_signal(dpad_right_held)
+
 	_send_dpad_vector()
 
 func _send_dpad_vector() -> void:
@@ -201,11 +259,13 @@ func _send_dpad_vector() -> void:
 
 	var x: float = float(int(dpad_right_held) - int(dpad_left_held))
 	var y: float = float(int(dpad_down_held) - int(dpad_up_held))
-	var input_vector := Vector2(x, y)
-	if input_vector.length() > 1.0:
-		input_vector = input_vector.normalized()
 
-	player_ship.call("set_joystick_input", input_vector)
+	# When sailing forward + turning, keep full throttle and use a gentle rudder.
+	# This feels like steering a ship rather than moving diagonally like a character.
+	if absf(y) > 0.5 and absf(x) > 0.5:
+		x *= 0.48
+
+	player_ship.call("set_joystick_input", Vector2(x, y))
 
 func _create_combat_indicator() -> void:
 	combat_panel = PanelContainer.new()
@@ -251,7 +311,13 @@ func _process(_delta: float) -> void:
 
 	if speed_label:
 		var speed_value: float = absf(float(player_ship.current_forward_speed)) if "current_forward_speed" in player_ship else 0.0
-		speed_label.text = "%.1f kn" % speed_value
+		var travel_active: bool = false
+		if player_ship.has_method("is_travel_mode"):
+			travel_active = bool(player_ship.call("is_travel_mode"))
+		if travel_active:
+			speed_label.text = "TRAVEL ×1.5  •  %.1f kn" % speed_value
+		else:
+			speed_label.text = "%.1f kn" % speed_value
 
 	_update_combat_indicator()
 	_update_upgrade_button()
