@@ -1,7 +1,5 @@
 extends CanvasLayer
 
-const AIM_JOYSTICK_SCENE: PackedScene = preload("res://scenes/ui/virtual_joystick.tscn")
-
 @onready var top_bar: Panel = $TopBar
 @onready var gold_label: Label = $TopBar/GoldContainer/GoldLabel
 @onready var gold_title: Label = $TopBar/GoldContainer/GoldTitle
@@ -23,8 +21,7 @@ const AIM_JOYSTICK_SCENE: PackedScene = preload("res://scenes/ui/virtual_joystic
 
 var player_ship: Node3D = null
 var world_controller: Node = null
-var target_button: Button = null
-var aim_joystick: Control = null
+var aim_button: Button = null
 var war_mode_panel: PanelContainer = null
 var war_mode_label: Label = null
 
@@ -37,8 +34,7 @@ func _ready() -> void:
 	GameManager.ship_storage_changed.connect(_on_ship_storage_changed)
 
 	_apply_minimal_hud_layout()
-	_create_lock_button()
-	_create_aim_joystick()
+	_create_aim_button()
 	_create_war_mode_badge()
 
 	_on_gold_changed(GameManager.gold)
@@ -90,45 +86,22 @@ func _apply_minimal_hud_layout() -> void:
 		right_controls.offset_bottom = -24.0
 		right_controls.add_theme_constant_override("separation", 10)
 
-func _create_lock_button() -> void:
+func _create_aim_button() -> void:
 	if not controls_root:
 		return
 
-	target_button = _make_combat_button("CAM LOCK", Vector2(108.0, 48.0))
-	target_button.name = "CameraLockButton"
-	target_button.anchor_left = 1.0
-	target_button.anchor_top = 1.0
-	target_button.anchor_right = 1.0
-	target_button.anchor_bottom = 1.0
-	target_button.offset_left = -230.0
-	target_button.offset_top = -170.0
-	target_button.offset_right = -122.0
-	target_button.offset_bottom = -122.0
-	target_button.pressed.connect(_on_target_pressed)
-	controls_root.add_child(target_button)
-
-func _create_aim_joystick() -> void:
-	if not controls_root:
-		return
-
-	aim_joystick = AIM_JOYSTICK_SCENE.instantiate() as Control
-	if not aim_joystick:
-		return
-
-	aim_joystick.name = "AimJoystick"
-	aim_joystick.anchor_left = 1.0
-	aim_joystick.anchor_top = 1.0
-	aim_joystick.anchor_right = 1.0
-	aim_joystick.anchor_bottom = 1.0
-	aim_joystick.offset_left = -410.0
-	aim_joystick.offset_top = -192.0
-	aim_joystick.offset_right = -250.0
-	aim_joystick.offset_bottom = -32.0
-	if "max_radius" in aim_joystick:
-		aim_joystick.max_radius = 60.0
-	if aim_joystick.has_signal("joystick_moved"):
-		aim_joystick.joystick_moved.connect(_on_aim_joystick_moved)
-	controls_root.add_child(aim_joystick)
+	aim_button = _make_combat_button("AIM", Vector2(108.0, 48.0))
+	aim_button.name = "AimButton"
+	aim_button.anchor_left = 1.0
+	aim_button.anchor_top = 1.0
+	aim_button.anchor_right = 1.0
+	aim_button.anchor_bottom = 1.0
+	aim_button.offset_left = -230.0
+	aim_button.offset_top = -170.0
+	aim_button.offset_right = -122.0
+	aim_button.offset_bottom = -122.0
+	aim_button.pressed.connect(_on_aim_pressed)
+	controls_root.add_child(aim_button)
 
 func _make_combat_button(label_text: String, minimum_size: Vector2) -> Button:
 	var button := Button.new()
@@ -219,19 +192,41 @@ func _update_fire_button(cannon_count: int) -> void:
 	if not fire_left_btn:
 		return
 
-	var side: int = 1
-	if player_ship.has_method("get_active_broadside_side"):
-		side = int(player_ship.call("get_active_broadside_side"))
+	var aiming: bool = false
+	if world_controller and world_controller.has_method("is_combat_aiming"):
+		aiming = bool(world_controller.call("is_combat_aiming"))
 
-	var cooldown: float = player_ship.port_cooldown if side < 0 else player_ship.starboard_cooldown
-	var side_name: String = "PORT" if side < 0 else "STARBOARD"
+	if not aiming:
+		fire_left_btn.disabled = true
+		fire_left_btn.text = "FIRE\nAIM FIRST"
+		return
+
+	var mode: String = "NONE"
+	if player_ship.has_method("get_weapon_mode"):
+		mode = String(player_ship.call("get_weapon_mode"))
+
+	var cooldown: float = 0.0
+	if player_ship.has_method("get_active_reload"):
+		cooldown = float(player_ship.call("get_active_reload"))
+
+	var title: String = "FIRE"
+	if mode == "PORT":
+		title = "PORT ×%d" % cannon_count
+	elif mode == "STARBOARD":
+		title = "STARBOARD ×%d" % cannon_count
+	elif mode == "CHASE":
+		title = "CHASE"
+	else:
+		fire_left_btn.disabled = true
+		fire_left_btn.text = "TURN CAMERA\nTO AIM"
+		return
 
 	if cooldown > 0.0:
 		fire_left_btn.disabled = true
-		fire_left_btn.text = "%s ×%d\nRELOAD %.1f" % [side_name, cannon_count, cooldown]
+		fire_left_btn.text = "%s\nRELOAD %.1f" % [title, cooldown]
 	else:
 		fire_left_btn.disabled = false
-		fire_left_btn.text = "%s ×%d\nFIRE" % [side_name, cannon_count]
+		fire_left_btn.text = "%s\nFIRE" % title
 
 func _update_brace_button() -> void:
 	if not fire_right_btn:
@@ -255,9 +250,20 @@ func _update_combat_hud() -> void:
 		elif mode == "DEFENSE":
 			war_mode_label.text = "WAR • DEFENSE"
 
-	if target_button and world_controller.has_method("is_ship_camera_locked"):
-		var locked: bool = bool(world_controller.call("is_ship_camera_locked"))
-		target_button.text = "CAM LOCKED" if locked else "FREE CAM"
+	if aim_button and world_controller.has_method("is_combat_aiming"):
+		var aiming: bool = bool(world_controller.call("is_combat_aiming"))
+		aim_button.text = "AIM ON" if aiming else "AIM"
+
+		if aiming and war_mode_label and world_controller.has_method("get_weapon_mode"):
+			var weapon_mode: String = String(world_controller.call("get_weapon_mode"))
+			if weapon_mode == "PORT":
+				war_mode_label.text = "AIM • PORT BROADSIDE"
+			elif weapon_mode == "STARBOARD":
+				war_mode_label.text = "AIM • STARBOARD BROADSIDE"
+			elif weapon_mode == "CHASE":
+				war_mode_label.text = "AIM • CHASE SHOT"
+			else:
+				war_mode_label.text = "AIM • TURN TO BROADSIDE"
 
 func _update_upgrade_button() -> void:
 	if not upgrade_btn:
@@ -311,8 +317,8 @@ func _show_notification(text: String) -> void:
 
 func _on_fire_pressed() -> void:
 	if player_ship and is_instance_valid(player_ship):
-		if player_ship.has_method("fire_active_broadside"):
-			player_ship.call("fire_active_broadside")
+		if player_ship.has_method("fire_active_weapon"):
+			player_ship.call("fire_active_weapon")
 
 func _on_brace_down() -> void:
 	if player_ship and is_instance_valid(player_ship) and player_ship.has_method("set_bracing"):
@@ -322,20 +328,6 @@ func _on_brace_up() -> void:
 	if player_ship and is_instance_valid(player_ship) and player_ship.has_method("set_bracing"):
 		player_ship.call("set_bracing", false)
 
-func _on_target_pressed() -> void:
-	if world_controller and world_controller.has_method("toggle_ship_camera_lock"):
-		world_controller.call("toggle_ship_camera_lock")
-
-func _on_aim_joystick_moved(vec: Vector2) -> void:
-	if not player_ship or not is_instance_valid(player_ship):
-		return
-
-	if vec.length() < 0.08:
-		if player_ship.has_method("set_aim_direction"):
-			player_ship.call("set_aim_direction", Vector3.ZERO)
-		return
-
-	if world_controller and world_controller.has_method("screen_aim_to_world"):
-		var world_direction: Variant = world_controller.call("screen_aim_to_world", vec)
-		if world_direction is Vector3 and player_ship.has_method("set_aim_direction"):
-			player_ship.call("set_aim_direction", world_direction)
+func _on_aim_pressed() -> void:
+	if world_controller and world_controller.has_method("toggle_combat_aim"):
+		world_controller.call("toggle_combat_aim")
