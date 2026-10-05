@@ -477,10 +477,7 @@ func _setup_aim_preview() -> void:
 
 	aim_preview = Node3D.new()
 	aim_preview.name = "BroadsideAimPreview"
-	get_parent().add_child.call_deferred(aim_preview)
-	await get_tree().process_frame
-	if not is_instance_valid(aim_preview):
-		return
+	get_parent().add_child(aim_preview)
 
 	var lane_mesh := BoxMesh.new()
 	lane_mesh.size = Vector3(5.0, 0.025, broadside_range)
