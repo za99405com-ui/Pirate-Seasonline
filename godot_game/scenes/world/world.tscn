@@ -133,12 +133,12 @@ roughness = 0.95
 
 [node name="World" type="Node3D"]
 script = ExtResource("1_world")
-camera_distance = 25.0
-camera_height = 14.0
-camera_look_ahead = 7.5
-camera_follow_speed = 4.2
-camera_rotation_speed = 3.4
+camera_distance = 28.0
+camera_follow_speed = 5.0
 camera_fov = 58.0
+camera_orbit_sensitivity = 0.006
+camera_min_pitch = 0.28
+camera_max_pitch = 1.05
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Env")
