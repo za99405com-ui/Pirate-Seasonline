@@ -53,7 +53,7 @@ static func _initialize_levels() -> void:
 
 	# LEVEL 1
 	_levels[1] = LevelInfo.new(
-		1, "The Ragged Drifter", "A battered starter pirate boat with one working bow cannon, one patched central sail and a rough timber deck.",
+		1, "Row Skiff", "Small primitive skiff. Single mast and simple canvas.",
 		100.0, 13.0, 1.45, 4.0, 30.0, 2.2, 20, 0,
 		["hull_base", "mast_main", "sail_main", "cannons_pair_1"],
 		["slot_cannon_port_1", "slot_cannon_starboard_1", "slot_sail_main"]
