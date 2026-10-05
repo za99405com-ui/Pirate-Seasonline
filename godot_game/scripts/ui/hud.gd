@@ -24,6 +24,9 @@ var world_controller: Node = null
 var aim_button: Button = null
 var war_mode_panel: PanelContainer = null
 var war_mode_label: Label = null
+var combat_guide_panel: PanelContainer = null
+var combat_guide_label: Label = null
+var target_reticle: Label = null
 
 func _ready() -> void:
 	world_controller = get_parent()
@@ -36,6 +39,8 @@ func _ready() -> void:
 	_apply_minimal_hud_layout()
 	_create_aim_button()
 	_create_war_mode_badge()
+	_create_combat_guide()
+	_create_target_reticle()
 
 	_on_gold_changed(GameManager.gold)
 	var current_info := ShipProgressionData.get_level_info(GameManager.current_ship_level)
@@ -90,16 +95,16 @@ func _create_aim_button() -> void:
 	if not controls_root:
 		return
 
-	aim_button = _make_combat_button("AIM", Vector2(108.0, 48.0))
+	aim_button = _make_combat_button("AIM", Vector2(124.0, 56.0))
 	aim_button.name = "AimButton"
 	aim_button.anchor_left = 1.0
 	aim_button.anchor_top = 1.0
 	aim_button.anchor_right = 1.0
 	aim_button.anchor_bottom = 1.0
-	aim_button.offset_left = -230.0
-	aim_button.offset_top = -170.0
+	aim_button.offset_left = -246.0
+	aim_button.offset_top = -184.0
 	aim_button.offset_right = -122.0
-	aim_button.offset_bottom = -122.0
+	aim_button.offset_bottom = -128.0
 	aim_button.pressed.connect(_on_aim_pressed)
 	controls_root.add_child(aim_button)
 
@@ -164,6 +169,53 @@ func _create_war_mode_badge() -> void:
 	war_mode_panel.add_child(war_mode_label)
 	add_child(war_mode_panel)
 
+func _create_combat_guide() -> void:
+	combat_guide_panel = PanelContainer.new()
+	combat_guide_panel.name = "CombatGuide"
+	combat_guide_panel.anchor_left = 0.5
+	combat_guide_panel.anchor_top = 1.0
+	combat_guide_panel.anchor_right = 0.5
+	combat_guide_panel.anchor_bottom = 1.0
+	combat_guide_panel.offset_left = -245.0
+	combat_guide_panel.offset_top = -132.0
+	combat_guide_panel.offset_right = 245.0
+	combat_guide_panel.offset_bottom = -88.0
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.018, 0.045, 0.07, 0.84)
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_right = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(0.76, 0.62, 0.25, 0.48)
+	style.corner_radius_top_left = 12
+	style.corner_radius_top_right = 12
+	style.corner_radius_bottom_left = 12
+	style.corner_radius_bottom_right = 12
+	combat_guide_panel.add_theme_stylebox_override("panel", style)
+
+	combat_guide_label = Label.new()
+	combat_guide_label.text = "AIM  →  TURN CAMERA  →  FIRE"
+	combat_guide_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	combat_guide_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	combat_guide_label.add_theme_font_size_override("font_size", 14)
+	combat_guide_label.add_theme_color_override("font_color", Color(0.94, 0.91, 0.76, 1.0))
+	combat_guide_panel.add_child(combat_guide_label)
+	add_child(combat_guide_panel)
+
+func _create_target_reticle() -> void:
+	target_reticle = Label.new()
+	target_reticle.name = "TargetReticle"
+	target_reticle.text = "+"
+	target_reticle.custom_minimum_size = Vector2(54.0, 54.0)
+	target_reticle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	target_reticle.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	target_reticle.add_theme_font_size_override("font_size", 36)
+	target_reticle.add_theme_color_override("font_color", Color(1.0, 0.76, 0.22, 1.0))
+	target_reticle.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	target_reticle.visible = false
+	add_child(target_reticle)
+
 func set_player(player: Node3D) -> void:
 	player_ship = player
 	if joystick and player_ship and player_ship.has_method("set_joystick_input"):
@@ -186,6 +238,8 @@ func _process(_delta: float) -> void:
 	_update_fire_button(cannon_count)
 	_update_brace_button()
 	_update_combat_hud()
+	_update_target_reticle()
+	_update_combat_guide()
 	_update_upgrade_button()
 
 func _update_fire_button(cannon_count: int) -> void:
@@ -264,6 +318,100 @@ func _update_combat_hud() -> void:
 				war_mode_label.text = "AIM • CHASE SHOT"
 			else:
 				war_mode_label.text = "AIM • TURN TO BROADSIDE"
+
+func _update_combat_guide() -> void:
+	if not combat_guide_panel or not combat_guide_label or not world_controller:
+		return
+
+	var aiming: bool = false
+	if world_controller.has_method("is_combat_aiming"):
+		aiming = bool(world_controller.call("is_combat_aiming"))
+
+	if not aiming:
+		combat_guide_panel.visible = true
+		combat_guide_label.text = "1  AIM   →   2  TURN CAMERA   →   3  FIRE"
+		combat_guide_label.add_theme_color_override("font_color", Color(0.94, 0.91, 0.76, 1.0))
+		return
+
+	var mode: String = "NONE"
+	if player_ship and player_ship.has_method("get_weapon_mode"):
+		mode = String(player_ship.call("get_weapon_mode"))
+
+	if mode == "NONE":
+		combat_guide_label.text = "TURN CAMERA TO A SIDE TO LINE UP THE CANNONS"
+		combat_guide_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.34, 1.0))
+		return
+
+	var reload_value: float = 0.0
+	if player_ship and player_ship.has_method("get_active_reload"):
+		reload_value = float(player_ship.call("get_active_reload"))
+
+	var has_target: bool = false
+	var target_distance: float = 0.0
+	if player_ship and player_ship.has_method("has_aim_target"):
+		has_target = bool(player_ship.call("has_aim_target"))
+	if has_target and player_ship.has_method("get_aim_target_distance"):
+		target_distance = float(player_ship.call("get_aim_target_distance"))
+
+	var weapon_name: String = "PORT BROADSIDE" if mode == "PORT" else ("STARBOARD BROADSIDE" if mode == "STARBOARD" else "CHASE SHOT")
+	if reload_value > 0.0:
+		combat_guide_label.text = "%s   •   RELOADING %.1fs" % [weapon_name, reload_value]
+		combat_guide_label.add_theme_color_override("font_color", Color(0.78, 0.82, 0.86, 1.0))
+	elif has_target:
+		combat_guide_label.text = "%s   •   TARGET %.0fm   •   FIRE" % [weapon_name, target_distance]
+		combat_guide_label.add_theme_color_override("font_color", Color(0.42, 1.0, 0.52, 1.0))
+	else:
+		combat_guide_label.text = "%s   •   MOVE THE MARKER OVER THE ENEMY   •   FIRE" % weapon_name
+		combat_guide_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.34, 1.0))
+
+func _update_target_reticle() -> void:
+	if not target_reticle or not player_ship or not world_controller:
+		return
+
+	var aiming: bool = false
+	if world_controller.has_method("is_combat_aiming"):
+		aiming = bool(world_controller.call("is_combat_aiming"))
+
+	if not aiming or not player_ship.has_method("get_predicted_impact_point"):
+		target_reticle.visible = false
+		return
+
+	var camera := get_viewport().get_camera_3d()
+	if not camera:
+		target_reticle.visible = false
+		return
+
+	var impact_value: Variant = player_ship.call("get_predicted_impact_point")
+	if not impact_value is Vector3:
+		target_reticle.visible = false
+		return
+
+	var impact_point := impact_value as Vector3
+	if camera.is_position_behind(impact_point):
+		target_reticle.visible = false
+		return
+
+	var screen_pos: Vector2 = camera.unproject_position(impact_point)
+	target_reticle.position = screen_pos - target_reticle.custom_minimum_size * 0.5
+	target_reticle.visible = true
+
+	var has_target: bool = false
+	if player_ship.has_method("has_aim_target"):
+		has_target = bool(player_ship.call("has_aim_target"))
+
+	var reload_value: float = 0.0
+	if player_ship.has_method("get_active_reload"):
+		reload_value = float(player_ship.call("get_active_reload"))
+
+	if reload_value > 0.0:
+		target_reticle.add_theme_color_override("font_color", Color(0.58, 0.62, 0.66, 0.85))
+		target_reticle.text = "+"
+	elif has_target:
+		target_reticle.add_theme_color_override("font_color", Color(0.24, 1.0, 0.38, 1.0))
+		target_reticle.text = "+"
+	else:
+		target_reticle.add_theme_color_override("font_color", Color(1.0, 0.76, 0.22, 1.0))
+		target_reticle.text = "+"
 
 func _update_upgrade_button() -> void:
 	if not upgrade_btn:
