@@ -1,5 +1,7 @@
 extends CanvasLayer
 
+const AIM_JOYSTICK_SCENE: PackedScene = preload("res://scenes/ui/virtual_joystick.tscn")
+
 @onready var top_bar: Panel = $TopBar
 @onready var gold_label: Label = $TopBar/GoldContainer/GoldLabel
 @onready var gold_title: Label = $TopBar/GoldContainer/GoldTitle
@@ -22,8 +24,7 @@ extends CanvasLayer
 var player_ship: Node3D = null
 var world_controller: Node = null
 var target_button: Button = null
-var zoom_in_button: Button = null
-var zoom_out_button: Button = null
+var aim_joystick: Control = null
 var war_mode_panel: PanelContainer = null
 var war_mode_label: Label = null
 
@@ -36,7 +37,8 @@ func _ready() -> void:
 	GameManager.ship_storage_changed.connect(_on_ship_storage_changed)
 
 	_apply_minimal_hud_layout()
-	_create_tactical_controls()
+	_create_lock_button()
+	_create_aim_joystick()
 	_create_war_mode_badge()
 
 	_on_gold_changed(GameManager.gold)
@@ -81,54 +83,65 @@ func _apply_minimal_hud_layout() -> void:
 
 	var right_controls := $Controls/RightControls as HBoxContainer
 	if right_controls:
-		right_controls.offset_left = -218.0
+		right_controls.offset_left = -224.0
 		right_controls.offset_top = -112.0
 		right_controls.offset_right = -22.0
 		right_controls.offset_bottom = -24.0
 		right_controls.add_theme_constant_override("separation", 10)
 
-func _create_tactical_controls() -> void:
+func _create_lock_button() -> void:
 	if not controls_root:
 		return
 
-	var tactical := HBoxContainer.new()
-	tactical.name = "TacticalControls"
-	tactical.anchor_left = 1.0
-	tactical.anchor_top = 1.0
-	tactical.anchor_right = 1.0
-	tactical.anchor_bottom = 1.0
-	tactical.offset_left = -224.0
-	tactical.offset_top = -178.0
-	tactical.offset_right = -22.0
-	tactical.offset_bottom = -126.0
-	tactical.add_theme_constant_override("separation", 8)
-	controls_root.add_child(tactical)
-
-	zoom_out_button = _make_tactical_button("−", Vector2(52.0, 48.0))
-	zoom_in_button = _make_tactical_button("+", Vector2(52.0, 48.0))
-	target_button = _make_tactical_button("LOCK", Vector2(82.0, 48.0))
-
-	tactical.add_child(zoom_out_button)
-	tactical.add_child(zoom_in_button)
-	tactical.add_child(target_button)
-
-	zoom_out_button.pressed.connect(_on_zoom_out_pressed)
-	zoom_in_button.pressed.connect(_on_zoom_in_pressed)
+	target_button = _make_combat_button("LOCK", Vector2(96.0, 48.0))
+	target_button.name = "TargetLockButton"
+	target_button.anchor_left = 1.0
+	target_button.anchor_top = 1.0
+	target_button.anchor_right = 1.0
+	target_button.anchor_bottom = 1.0
+	target_button.offset_left = -218.0
+	target_button.offset_top = -170.0
+	target_button.offset_right = -122.0
+	target_button.offset_bottom = -122.0
 	target_button.pressed.connect(_on_target_pressed)
+	controls_root.add_child(target_button)
 
-func _make_tactical_button(label_text: String, minimum_size: Vector2) -> Button:
+func _create_aim_joystick() -> void:
+	if not controls_root:
+		return
+
+	aim_joystick = AIM_JOYSTICK_SCENE.instantiate() as Control
+	if not aim_joystick:
+		return
+
+	aim_joystick.name = "AimJoystick"
+	aim_joystick.anchor_left = 1.0
+	aim_joystick.anchor_top = 1.0
+	aim_joystick.anchor_right = 1.0
+	aim_joystick.anchor_bottom = 1.0
+	aim_joystick.offset_left = -410.0
+	aim_joystick.offset_top = -192.0
+	aim_joystick.offset_right = -250.0
+	aim_joystick.offset_bottom = -32.0
+	if "max_radius" in aim_joystick:
+		aim_joystick.max_radius = 60.0
+	if aim_joystick.has_signal("joystick_moved"):
+		aim_joystick.joystick_moved.connect(_on_aim_joystick_moved)
+	controls_root.add_child(aim_joystick)
+
+func _make_combat_button(label_text: String, minimum_size: Vector2) -> Button:
 	var button := Button.new()
 	button.text = label_text
 	button.custom_minimum_size = minimum_size
 	button.add_theme_font_size_override("font_size", 14)
 
 	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.025, 0.07, 0.12, 0.88)
+	normal.bg_color = Color(0.025, 0.07, 0.12, 0.90)
 	normal.border_width_left = 1
 	normal.border_width_top = 1
 	normal.border_width_right = 1
 	normal.border_width_bottom = 1
-	normal.border_color = Color(0.82, 0.61, 0.22, 0.70)
+	normal.border_color = Color(0.82, 0.61, 0.22, 0.74)
 	normal.corner_radius_top_left = 12
 	normal.corner_radius_top_right = 12
 	normal.corner_radius_bottom_left = 12
@@ -196,22 +209,24 @@ func _process(_delta: float) -> void:
 	if player_ship.has_method("get_cannons_per_side"):
 		cannon_count = int(player_ship.call("get_cannons_per_side"))
 
-	if player_ship.port_cooldown > 0.0:
-		fire_left_btn.disabled = true
-		fire_left_btn.text = "PORT ×%d\n%.1fs" % [cannon_count, player_ship.port_cooldown]
-	else:
-		fire_left_btn.disabled = false
-		fire_left_btn.text = "PORT ×%d\nFIRE" % cannon_count
-
-	if player_ship.starboard_cooldown > 0.0:
-		fire_right_btn.disabled = true
-		fire_right_btn.text = "STARBOARD ×%d\n%.1fs" % [cannon_count, player_ship.starboard_cooldown]
-	else:
-		fire_right_btn.disabled = false
-		fire_right_btn.text = "STARBOARD ×%d\nFIRE" % cannon_count
-
+	_update_fire_button(fire_left_btn, true, cannon_count)
+	_update_fire_button(fire_right_btn, false, cannon_count)
 	_update_combat_hud()
 	_update_upgrade_button()
+
+func _update_fire_button(button: Button, is_port: bool, cannon_count: int) -> void:
+	if not button:
+		return
+
+	var cooldown: float = player_ship.port_cooldown if is_port else player_ship.starboard_cooldown
+	var side_name: String = "PORT" if is_port else "STARBOARD"
+
+	if cooldown > 0.0:
+		button.disabled = true
+		button.text = "%s ×%d\nRELOAD %.1f" % [side_name, cannon_count, cooldown]
+	else:
+		button.disabled = false
+		button.text = "%s ×%d\nFIRE" % [side_name, cannon_count]
 
 func _update_combat_hud() -> void:
 	if not world_controller:
@@ -230,7 +245,7 @@ func _update_combat_hud() -> void:
 
 	if target_button and world_controller.has_method("get_combat_target"):
 		var target: Variant = world_controller.call("get_combat_target")
-		target_button.text = "LOCKED" if target is Node3D and is_instance_valid(target) else "LOCK"
+		target_button.text = "UNLOCK" if target is Node3D and is_instance_valid(target) else "LOCK"
 
 func _update_upgrade_button() -> void:
 	if not upgrade_btn:
@@ -290,14 +305,20 @@ func _on_fire_right_pressed() -> void:
 	if player_ship and is_instance_valid(player_ship):
 		player_ship.fire_right()
 
-func _on_zoom_in_pressed() -> void:
-	if world_controller and world_controller.has_method("adjust_camera_zoom"):
-		world_controller.call("adjust_camera_zoom", -0.10)
-
-func _on_zoom_out_pressed() -> void:
-	if world_controller and world_controller.has_method("adjust_camera_zoom"):
-		world_controller.call("adjust_camera_zoom", 0.10)
-
 func _on_target_pressed() -> void:
 	if world_controller and world_controller.has_method("toggle_combat_target"):
 		world_controller.call("toggle_combat_target")
+
+func _on_aim_joystick_moved(vec: Vector2) -> void:
+	if not player_ship or not is_instance_valid(player_ship):
+		return
+
+	if vec.length() < 0.08:
+		if player_ship.has_method("set_aim_direction"):
+			player_ship.call("set_aim_direction", Vector3.ZERO)
+		return
+
+	if world_controller and world_controller.has_method("screen_aim_to_world"):
+		var world_direction: Variant = world_controller.call("screen_aim_to_world", vec)
+		if world_direction is Vector3 and player_ship.has_method("set_aim_direction"):
+			player_ship.call("set_aim_direction", world_direction)
