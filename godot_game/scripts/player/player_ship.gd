@@ -35,6 +35,7 @@ var starboard_cooldown: float = 0.0
 var wave_time: float = 0.0
 var current_level: int = 1
 var combat_target: Node3D = null
+var manual_aim_direction: Vector3 = Vector3.ZERO
 var world_health_anchor: Node3D = null
 var world_health_fill: MeshInstance3D = null
 
@@ -170,20 +171,42 @@ func _fire_broadside(direction: Vector3, marker_parent: Node3D) -> void:
 			_spawn_single_ball(marker.global_position, spread_dir)
 
 func _get_aim_assisted_direction(base_direction: Vector3) -> Vector3:
-	var flat_base := Vector3(base_direction.x, 0.0, base_direction.z).normalized()
-	var best_direction := flat_base
-	var best_angle: float = deg_to_rad(aim_assist_degrees)
+	var desired_direction: Vector3 = Vector3(base_direction.x, 0.0, base_direction.z).normalized()
 
+	# Manual aim stick takes priority while it is being held.
+	if manual_aim_direction.length_squared() > 0.0001:
+		desired_direction = manual_aim_direction
+
+		# Gentle assist around the manually selected direction.
+		var manual_best: Vector3 = desired_direction
+		var manual_best_angle: float = deg_to_rad(14.0)
+		for enemy in get_tree().get_nodes_in_group("enemies"):
+			if not enemy is Node3D or not is_instance_valid(enemy):
+				continue
+			var enemy_node := enemy as Node3D
+			var to_enemy: Vector3 = enemy_node.global_position - global_position
+			to_enemy.y = 0.0
+			var distance: float = to_enemy.length()
+			if distance <= 0.01 or distance > aim_assist_range * 1.25:
+				continue
+			var candidate: Vector3 = to_enemy / distance
+			var angle: float = desired_direction.angle_to(candidate)
+			if angle < manual_best_angle:
+				manual_best_angle = angle
+				manual_best = candidate
+		return manual_best
+
+	# When the aim stick is neutral, a locked target gets priority.
 	if combat_target and is_instance_valid(combat_target):
 		var locked_vector: Vector3 = combat_target.global_position - global_position
 		locked_vector.y = 0.0
 		var locked_distance: float = locked_vector.length()
-		if locked_distance > 0.01 and locked_distance <= aim_assist_range * 1.4:
-			var locked_direction: Vector3 = locked_vector / locked_distance
-			var locked_angle: float = flat_base.angle_to(locked_direction)
-			if locked_angle <= deg_to_rad(52.0):
-				return locked_direction
+		if locked_distance > 0.01 and locked_distance <= aim_assist_range * 1.5:
+			return locked_vector / locked_distance
 
+	# Otherwise keep a small automatic broadside assist.
+	var best_direction: Vector3 = desired_direction
+	var best_angle: float = deg_to_rad(aim_assist_degrees)
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if not enemy is Node3D or not is_instance_valid(enemy):
 			continue
@@ -194,7 +217,7 @@ func _get_aim_assisted_direction(base_direction: Vector3) -> Vector3:
 		if distance <= 0.01 or distance > aim_assist_range:
 			continue
 		var candidate: Vector3 = to_enemy / distance
-		var angle: float = flat_base.angle_to(candidate)
+		var angle: float = desired_direction.angle_to(candidate)
 		if angle < best_angle:
 			best_angle = angle
 			best_direction = candidate
@@ -319,6 +342,14 @@ func _on_storage_changed(used: int, capacity: int) -> void:
 
 func set_combat_target(target: Node3D) -> void:
 	combat_target = target
+
+func set_aim_direction(direction: Vector3) -> void:
+	manual_aim_direction = direction
+	manual_aim_direction.y = 0.0
+	if manual_aim_direction.length_squared() > 0.0001:
+		manual_aim_direction = manual_aim_direction.normalized()
+	else:
+		manual_aim_direction = Vector3.ZERO
 
 func get_cannons_per_side() -> int:
 	if current_level >= 15:
