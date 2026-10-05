@@ -27,16 +27,13 @@ var dpad_up: Button = null
 var dpad_down: Button = null
 var dpad_left: Button = null
 var dpad_right: Button = null
-var dpad_up_left: Button = null
-var dpad_up_right: Button = null
-var dpad_down_left: Button = null
-var dpad_down_right: Button = null
 var dpad_up_held: bool = false
 var dpad_down_held: bool = false
 var dpad_left_held: bool = false
 var dpad_right_held: bool = false
-var dpad_touches: Dictionary = {}
-var mouse_dpad_direction: String = ""
+var dpad_touch_vectors: Dictionary = {}
+var mouse_dpad_active: bool = false
+var mouse_dpad_vector: Vector2 = Vector2.ZERO
 
 func _ready() -> void:
 	world_controller = get_parent()
@@ -110,19 +107,14 @@ func _create_dpad() -> void:
 	dpad_root.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	controls_root.add_child(dpad_root)
 
-	dpad_up_left = _make_dpad_button("↖")
+	# Only four visible buttons. Sliding one finger between them blends the movement.
 	dpad_up = _make_dpad_button("▲")
-	dpad_up_right = _make_dpad_button("↗")
+	dpad_down = _make_dpad_button("▼")
 	dpad_left = _make_dpad_button("◀")
 	dpad_right = _make_dpad_button("▶")
-	dpad_down_left = _make_dpad_button("↙")
-	dpad_down = _make_dpad_button("▼")
-	dpad_down_right = _make_dpad_button("↘")
 
-	for button in [dpad_up_left, dpad_up, dpad_up_right, dpad_left, dpad_right, dpad_down_left, dpad_down, dpad_down_right]:
+	for button in [dpad_up, dpad_down, dpad_left, dpad_right]:
 		dpad_root.add_child(button)
-
-	for button in [dpad_up_left, dpad_up, dpad_up_right, dpad_left, dpad_right, dpad_down_left, dpad_down, dpad_down_right]:
 		button.toggle_mode = true
 		button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -132,7 +124,7 @@ func _make_dpad_button(symbol: String) -> Button:
 	var button := Button.new()
 	button.text = symbol
 	button.focus_mode = Control.FOCUS_NONE
-	button.add_theme_font_size_override("font_size", 30)
+	button.add_theme_font_size_override("font_size", 32)
 
 	var normal := StyleBoxFlat.new()
 	normal.bg_color = Color(0.025, 0.07, 0.12, 0.78)
@@ -141,10 +133,10 @@ func _make_dpad_button(symbol: String) -> Button:
 	normal.border_width_right = 2
 	normal.border_width_bottom = 2
 	normal.border_color = Color(0.86, 0.68, 0.24, 0.82)
-	normal.corner_radius_top_left = 18
-	normal.corner_radius_top_right = 18
-	normal.corner_radius_bottom_left = 18
-	normal.corner_radius_bottom_right = 18
+	normal.corner_radius_top_left = 20
+	normal.corner_radius_top_right = 20
+	normal.corner_radius_bottom_left = 20
+	normal.corner_radius_bottom_right = 20
 
 	var pressed := normal.duplicate() as StyleBoxFlat
 	pressed.bg_color = Color(0.24, 0.15, 0.045, 0.96)
@@ -162,7 +154,7 @@ func _layout_dpad() -> void:
 
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
 	var dpad_size: float = clampf(viewport_size.y * 0.38, 238.0, 310.0)
-	var button_size: float = dpad_size * 0.30
+	var button_size: float = dpad_size * 0.34
 	var center: float = dpad_size * 0.5
 	var half_button: float = button_size * 0.5
 	var far: float = dpad_size - button_size
@@ -173,14 +165,10 @@ func _layout_dpad() -> void:
 	dpad_root.offset_right = edge + dpad_size
 	dpad_root.offset_bottom = -edge
 
-	_place_dpad_button(dpad_up_left, 0.0, 0.0, button_size)
 	_place_dpad_button(dpad_up, center - half_button, 0.0, button_size)
-	_place_dpad_button(dpad_up_right, far, 0.0, button_size)
+	_place_dpad_button(dpad_down, center - half_button, far, button_size)
 	_place_dpad_button(dpad_left, 0.0, center - half_button, button_size)
 	_place_dpad_button(dpad_right, far, center - half_button, button_size)
-	_place_dpad_button(dpad_down_left, 0.0, far, button_size)
-	_place_dpad_button(dpad_down, center - half_button, far, button_size)
-	_place_dpad_button(dpad_down_right, far, far, button_size)
 
 func _place_dpad_button(button: Button, x: float, y: float, button_size: float) -> void:
 	if not button:
@@ -190,132 +178,96 @@ func _place_dpad_button(button: Button, x: float, y: float, button_size: float) 
 	button.custom_minimum_size = Vector2(button_size, button_size)
 
 func _input(event: InputEvent) -> void:
-	# One Control tracks every finger, so UP+LEFT / UP+RIGHT works reliably on mobile.
+	# A finger must START on one of the four arrows. After that, sliding around the
+	# pad continuously mixes throttle + rudder, e.g. forward -> forward/right.
 	if event is InputEventScreenTouch:
 		var touch := event as InputEventScreenTouch
 		if touch.pressed:
-			var direction := _dpad_direction_at(touch.position)
-			if not direction.is_empty():
-				dpad_touches[touch.index] = direction
+			if _is_on_dpad_button(touch.position):
+				dpad_touch_vectors[touch.index] = _dpad_vector_from_position(touch.position)
 				get_viewport().set_input_as_handled()
 		else:
-			if dpad_touches.has(touch.index):
-				dpad_touches.erase(touch.index)
+			if dpad_touch_vectors.has(touch.index):
+				dpad_touch_vectors.erase(touch.index)
 				get_viewport().set_input_as_handled()
-		_refresh_dpad_state()
+		_refresh_dpad_input()
 	elif event is InputEventScreenDrag:
 		var drag := event as InputEventScreenDrag
-		if dpad_touches.has(drag.index):
-			var direction := _dpad_direction_at(drag.position)
-			if direction.is_empty():
-				dpad_touches.erase(drag.index)
-			else:
-				dpad_touches[drag.index] = direction
+		if dpad_touch_vectors.has(drag.index):
+			dpad_touch_vectors[drag.index] = _dpad_vector_from_position(drag.position)
 			get_viewport().set_input_as_handled()
-			_refresh_dpad_state()
+			_refresh_dpad_input()
 	elif event is InputEventMouseButton:
 		var mouse := event as InputEventMouseButton
 		if mouse.button_index == MOUSE_BUTTON_LEFT:
-			mouse_dpad_direction = _dpad_direction_at(mouse.position) if mouse.pressed else ""
-			_refresh_dpad_state()
+			if mouse.pressed and _is_on_dpad_button(mouse.position):
+				mouse_dpad_active = true
+				mouse_dpad_vector = _dpad_vector_from_position(mouse.position)
+			else:
+				mouse_dpad_active = false
+				mouse_dpad_vector = Vector2.ZERO
+			_refresh_dpad_input()
+	elif event is InputEventMouseMotion and mouse_dpad_active:
+		var motion := event as InputEventMouseMotion
+		mouse_dpad_vector = _dpad_vector_from_position(motion.position)
+		_refresh_dpad_input()
 
-func _dpad_direction_at(screen_position: Vector2) -> String:
-	if not dpad_root or not dpad_root.visible:
-		return ""
-	if dpad_up_left and dpad_up_left.get_global_rect().has_point(screen_position):
-		return "up_left"
-	if dpad_up and dpad_up.get_global_rect().has_point(screen_position):
-		return "up"
-	if dpad_up_right and dpad_up_right.get_global_rect().has_point(screen_position):
-		return "up_right"
-	if dpad_left and dpad_left.get_global_rect().has_point(screen_position):
-		return "left"
-	if dpad_right and dpad_right.get_global_rect().has_point(screen_position):
-		return "right"
-	if dpad_down_left and dpad_down_left.get_global_rect().has_point(screen_position):
-		return "down_left"
-	if dpad_down and dpad_down.get_global_rect().has_point(screen_position):
-		return "down"
-	if dpad_down_right and dpad_down_right.get_global_rect().has_point(screen_position):
-		return "down_right"
-	return ""
+func _is_on_dpad_button(screen_position: Vector2) -> bool:
+	for button in [dpad_up, dpad_down, dpad_left, dpad_right]:
+		if button and button.get_global_rect().has_point(screen_position):
+			return true
+	return false
 
-func _refresh_dpad_state() -> void:
-	dpad_up_held = false
-	dpad_down_held = false
-	dpad_left_held = false
-	dpad_right_held = false
+func _dpad_vector_from_position(screen_position: Vector2) -> Vector2:
+	if not dpad_root:
+		return Vector2.ZERO
 
-	var directions: Array[String] = []
-	for value in dpad_touches.values():
-		directions.append(String(value))
-	if not mouse_dpad_direction.is_empty():
-		directions.append(mouse_dpad_direction)
+	var rect: Rect2 = dpad_root.get_global_rect()
+	var center: Vector2 = rect.position + rect.size * 0.5
+	var offset: Vector2 = screen_position - center
+	var radius: float = maxf(minf(rect.size.x, rect.size.y) * 0.5, 1.0)
+	var vector: Vector2 = offset / radius
 
-	var up_left_active: bool = false
-	var up_right_active: bool = false
-	var down_left_active: bool = false
-	var down_right_active: bool = false
+	if vector.length() > 1.0:
+		vector = vector.normalized()
 
-	for direction in directions:
-		match direction:
-			"up":
-				dpad_up_held = true
-			"down":
-				dpad_down_held = true
-			"left":
-				dpad_left_held = true
-			"right":
-				dpad_right_held = true
-			"up_left":
-				dpad_up_held = true
-				dpad_left_held = true
-				up_left_active = true
-			"up_right":
-				dpad_up_held = true
-				dpad_right_held = true
-				up_right_active = true
-			"down_left":
-				dpad_down_held = true
-				dpad_left_held = true
-				down_left_active = true
-			"down_right":
-				dpad_down_held = true
-				dpad_right_held = true
-				down_right_active = true
+	# Keep a strong forward/back component when the finger starts moving sideways.
+	if absf(vector.x) < 0.08:
+		vector.x = 0.0
+	if absf(vector.y) < 0.08:
+		vector.y = 0.0
+	return vector
 
-	if dpad_up_left:
-		dpad_up_left.set_pressed_no_signal(up_left_active)
+func _refresh_dpad_input() -> void:
+	var combined := Vector2.ZERO
+	for value in dpad_touch_vectors.values():
+		if value is Vector2:
+			combined += value as Vector2
+	if mouse_dpad_active:
+		combined += mouse_dpad_vector
+	if combined.length() > 1.0:
+		combined = combined.normalized()
+
+	dpad_left_held = combined.x < -0.18
+	dpad_right_held = combined.x > 0.18
+	dpad_up_held = combined.y < -0.18
+	dpad_down_held = combined.y > 0.18
+
 	if dpad_up:
-		dpad_up.set_pressed_no_signal(dpad_up_held and not up_left_active and not up_right_active)
-	if dpad_up_right:
-		dpad_up_right.set_pressed_no_signal(up_right_active)
-	if dpad_left:
-		dpad_left.set_pressed_no_signal(dpad_left_held and not up_left_active and not down_left_active)
-	if dpad_right:
-		dpad_right.set_pressed_no_signal(dpad_right_held and not up_right_active and not down_right_active)
-	if dpad_down_left:
-		dpad_down_left.set_pressed_no_signal(down_left_active)
+		dpad_up.set_pressed_no_signal(dpad_up_held)
 	if dpad_down:
-		dpad_down.set_pressed_no_signal(dpad_down_held and not down_left_active and not down_right_active)
-	if dpad_down_right:
-		dpad_down_right.set_pressed_no_signal(down_right_active)
+		dpad_down.set_pressed_no_signal(dpad_down_held)
+	if dpad_left:
+		dpad_left.set_pressed_no_signal(dpad_left_held)
+	if dpad_right:
+		dpad_right.set_pressed_no_signal(dpad_right_held)
 
-	_send_dpad_vector()
+	_send_dpad_vector(combined)
 
-func _send_dpad_vector() -> void:
+func _send_dpad_vector(input_vector: Vector2) -> void:
 	if not player_ship or not is_instance_valid(player_ship) or not player_ship.has_method("set_joystick_input"):
 		return
-
-	var x: float = float(int(dpad_right_held) - int(dpad_left_held))
-	var y: float = float(int(dpad_down_held) - int(dpad_up_held))
-
-	# When sailing forward + turning, keep full throttle and use a gentle rudder.
-	# This feels like steering a ship rather than moving diagonally like a character.
-	if absf(y) > 0.5 and absf(x) > 0.5:
-		x *= 0.48
-
-	player_ship.call("set_joystick_input", Vector2(x, y))
+	player_ship.call("set_joystick_input", input_vector)
 
 func _create_combat_indicator() -> void:
 	combat_panel = PanelContainer.new()
