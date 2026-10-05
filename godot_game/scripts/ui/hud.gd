@@ -32,7 +32,9 @@ var dpad_down_held: bool = false
 var dpad_left_held: bool = false
 var dpad_right_held: bool = false
 var dpad_touch_vectors: Dictionary = {}
+var dpad_touch_modes: Dictionary = {}
 var mouse_dpad_active: bool = false
+var mouse_dpad_mode: String = ""
 var mouse_dpad_vector: Vector2 = Vector2.ZERO
 
 func _ready() -> void:
@@ -153,8 +155,8 @@ func _layout_dpad() -> void:
 		return
 
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	var dpad_size: float = clampf(viewport_size.y * 0.38, 238.0, 310.0)
-	var button_size: float = dpad_size * 0.34
+	var dpad_size: float = clampf(viewport_size.y * 0.44, 270.0, 350.0)
+	var button_size: float = dpad_size * 0.26
 	var center: float = dpad_size * 0.5
 	var half_button: float = button_size * 0.5
 	var far: float = dpad_size - button_size
@@ -178,65 +180,77 @@ func _place_dpad_button(button: Button, x: float, y: float, button_size: float) 
 	button.custom_minimum_size = Vector2(button_size, button_size)
 
 func _input(event: InputEvent) -> void:
-	# A finger must START on one of the four arrows. After that, sliding around the
-	# pad continuously mixes throttle + rudder, e.g. forward -> forward/right.
+	# Start on one of the four arrows. If the finger starts on forward/back,
+	# sliding sideways keeps full throttle and adds rudder instead of weakening speed.
 	if event is InputEventScreenTouch:
 		var touch := event as InputEventScreenTouch
 		if touch.pressed:
-			if _is_on_dpad_button(touch.position):
-				dpad_touch_vectors[touch.index] = _dpad_vector_from_position(touch.position)
+			var mode := _dpad_start_mode(touch.position)
+			if not mode.is_empty():
+				dpad_touch_modes[touch.index] = mode
+				dpad_touch_vectors[touch.index] = _dpad_vector_for_drag(mode, touch.position)
 				get_viewport().set_input_as_handled()
 		else:
-			if dpad_touch_vectors.has(touch.index):
+			if dpad_touch_modes.has(touch.index):
+				dpad_touch_modes.erase(touch.index)
 				dpad_touch_vectors.erase(touch.index)
 				get_viewport().set_input_as_handled()
 		_refresh_dpad_input()
 	elif event is InputEventScreenDrag:
 		var drag := event as InputEventScreenDrag
-		if dpad_touch_vectors.has(drag.index):
-			dpad_touch_vectors[drag.index] = _dpad_vector_from_position(drag.position)
+		if dpad_touch_modes.has(drag.index):
+			var mode := String(dpad_touch_modes[drag.index])
+			dpad_touch_vectors[drag.index] = _dpad_vector_for_drag(mode, drag.position)
 			get_viewport().set_input_as_handled()
 			_refresh_dpad_input()
 	elif event is InputEventMouseButton:
 		var mouse := event as InputEventMouseButton
 		if mouse.button_index == MOUSE_BUTTON_LEFT:
-			if mouse.pressed and _is_on_dpad_button(mouse.position):
-				mouse_dpad_active = true
-				mouse_dpad_vector = _dpad_vector_from_position(mouse.position)
+			if mouse.pressed:
+				mouse_dpad_mode = _dpad_start_mode(mouse.position)
+				mouse_dpad_active = not mouse_dpad_mode.is_empty()
+				if mouse_dpad_active:
+					mouse_dpad_vector = _dpad_vector_for_drag(mouse_dpad_mode, mouse.position)
 			else:
 				mouse_dpad_active = false
+				mouse_dpad_mode = ""
 				mouse_dpad_vector = Vector2.ZERO
 			_refresh_dpad_input()
 	elif event is InputEventMouseMotion and mouse_dpad_active:
 		var motion := event as InputEventMouseMotion
-		mouse_dpad_vector = _dpad_vector_from_position(motion.position)
+		mouse_dpad_vector = _dpad_vector_for_drag(mouse_dpad_mode, motion.position)
 		_refresh_dpad_input()
 
-func _is_on_dpad_button(screen_position: Vector2) -> bool:
-	for button in [dpad_up, dpad_down, dpad_left, dpad_right]:
-		if button and button.get_global_rect().has_point(screen_position):
-			return true
-	return false
+func _dpad_start_mode(screen_position: Vector2) -> String:
+	if dpad_up and dpad_up.get_global_rect().has_point(screen_position):
+		return "up"
+	if dpad_down and dpad_down.get_global_rect().has_point(screen_position):
+		return "down"
+	if dpad_left and dpad_left.get_global_rect().has_point(screen_position):
+		return "left"
+	if dpad_right and dpad_right.get_global_rect().has_point(screen_position):
+		return "right"
+	return ""
 
-func _dpad_vector_from_position(screen_position: Vector2) -> Vector2:
+func _dpad_vector_for_drag(mode: String, screen_position: Vector2) -> Vector2:
 	if not dpad_root:
 		return Vector2.ZERO
 
 	var rect: Rect2 = dpad_root.get_global_rect()
 	var center: Vector2 = rect.position + rect.size * 0.5
-	var offset: Vector2 = screen_position - center
-	var radius: float = maxf(minf(rect.size.x, rect.size.y) * 0.5, 1.0)
-	var vector: Vector2 = offset / radius
+	var horizontal_range: float = maxf(rect.size.x * 0.44, 1.0)
+	var steer: float = clampf((screen_position.x - center.x) / horizontal_range, -1.0, 1.0)
 
-	if vector.length() > 1.0:
-		vector = vector.normalized()
-
-	# Keep a strong forward/back component when the finger starts moving sideways.
-	if absf(vector.x) < 0.08:
-		vector.x = 0.0
-	if absf(vector.y) < 0.08:
-		vector.y = 0.0
-	return vector
+	match mode:
+		"up":
+			return Vector2(steer * 0.68, -1.0)
+		"down":
+			return Vector2(steer * 0.68, 1.0)
+		"left":
+			return Vector2(-1.0, 0.0)
+		"right":
+			return Vector2(1.0, 0.0)
+	return Vector2.ZERO
 
 func _refresh_dpad_input() -> void:
 	var combined := Vector2.ZERO
@@ -245,8 +259,10 @@ func _refresh_dpad_input() -> void:
 			combined += value as Vector2
 	if mouse_dpad_active:
 		combined += mouse_dpad_vector
-	if combined.length() > 1.0:
-		combined = combined.normalized()
+
+	# Clamp each axis separately: forward + rudder must keep full forward throttle.
+	combined.x = clampf(combined.x, -1.0, 1.0)
+	combined.y = clampf(combined.y, -1.0, 1.0)
 
 	dpad_left_held = combined.x < -0.18
 	dpad_right_held = combined.x > 0.18
