@@ -10,11 +10,12 @@ extends Node3D
 @export var camera_pitch: float = 0.52
 @export var camera_fov: float = 58.0
 @export var camera_follow_speed: float = 5.2
-@export var camera_turn_speed: float = 4.0
-@export var camera_orbit_sensitivity: float = 0.006
-@export var camera_min_pitch: float = 0.30
-@export var camera_max_pitch: float = 0.96
-@export var camera_return_delay: float = 0.28
+@export var camera_turn_speed: float = 2.35
+@export var camera_orbit_sensitivity: float = 0.0062
+@export var camera_orbit_smooth_speed: float = 14.0
+@export var camera_min_pitch: float = 0.26
+@export var camera_max_pitch: float = 1.02
+@export var camera_return_delay: float = 0.65
 
 @export_group("Travel Camera")
 @export var travel_camera_distance: float = 36.5
@@ -35,6 +36,8 @@ extends Node3D
 
 var _camera_yaw: float = 0.0
 var _camera_pitch: float = 0.52
+var _camera_target_yaw: float = 0.0
+var _camera_target_pitch: float = 0.52
 var _camera_drag_touch: int = -1
 var _mouse_orbiting: bool = false
 var _camera_idle_time: float = 0.0
@@ -51,7 +54,9 @@ func _ready() -> void:
 
 	if player_ship:
 		_camera_yaw = player_ship.global_rotation.y
+		_camera_target_yaw = _camera_yaw
 	_camera_pitch = camera_pitch
+	_camera_target_pitch = _camera_pitch
 
 	if camera:
 		camera.fov = camera_fov
@@ -88,9 +93,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _rotate_camera(relative: Vector2) -> void:
 	_camera_idle_time = 0.0
-	_camera_yaw -= relative.x * camera_orbit_sensitivity
-	_camera_pitch = clampf(
-		_camera_pitch + relative.y * camera_orbit_sensitivity,
+	# Free 360-degree orbit around the ship. Horizontal yaw is intentionally not clamped.
+	_camera_target_yaw -= relative.x * camera_orbit_sensitivity
+	_camera_target_pitch = clampf(
+		_camera_target_pitch + relative.y * camera_orbit_sensitivity,
 		camera_min_pitch,
 		camera_max_pitch
 	)
@@ -102,7 +108,7 @@ func _snap_camera() -> void:
 	var travel_blend: float = _get_travel_blend()
 	var distance: float = combat_camera_distance if _in_combat else lerpf(camera_distance, travel_camera_distance, travel_blend)
 	camera.global_position = player_ship.global_position + _camera_offset(distance)
-	camera.look_at(player_ship.global_position + Vector3(0.0, 2.0, 0.0), Vector3.UP)
+	camera.look_at(player_ship.global_position + Vector3(0.0, 2.5, 0.0), Vector3.UP)
 
 func _update_camera(delta: float) -> void:
 	if not player_ship or not is_instance_valid(player_ship) or not camera:
@@ -126,13 +132,20 @@ func _update_camera(delta: float) -> void:
 			desired_yaw += clampf(enemy_angle * combat_heading_assist, -max_assist, max_assist)
 
 	if camera_is_held:
+		# While the finger is held down, the camera belongs to the player, not the ship.
 		_camera_idle_time = 0.0
 	else:
 		_camera_idle_time += delta
 		if _camera_idle_time >= camera_return_delay:
-			var turn_blend: float = 1.0 - exp(-camera_turn_speed * delta)
-			_camera_yaw = lerp_angle(_camera_yaw, desired_yaw, turn_blend)
-			_camera_pitch = lerpf(_camera_pitch, desired_pitch, turn_blend)
+			# Soft magnetic return behind the stern after the player releases the camera.
+			var return_blend: float = 1.0 - exp(-camera_turn_speed * delta)
+			_camera_target_yaw = lerp_angle(_camera_target_yaw, desired_yaw, return_blend)
+			_camera_target_pitch = lerpf(_camera_target_pitch, desired_pitch, return_blend)
+
+	# Smooth the hand movement itself so orbiting feels weighted instead of twitchy.
+	var orbit_blend: float = 1.0 - exp(-camera_orbit_smooth_speed * delta)
+	_camera_yaw = lerp_angle(_camera_yaw, _camera_target_yaw, orbit_blend)
+	_camera_pitch = lerpf(_camera_pitch, _camera_target_pitch, orbit_blend)
 
 	var desired_distance: float = combat_camera_distance if _in_combat else lerpf(camera_distance, travel_camera_distance, travel_blend)
 	var desired_fov: float = combat_camera_fov if _in_combat else lerpf(camera_fov, travel_camera_fov, travel_blend)
@@ -140,7 +153,7 @@ func _update_camera(delta: float) -> void:
 	var follow_blend: float = 1.0 - exp(-camera_follow_speed * delta)
 	camera.global_position = camera.global_position.lerp(ideal_position, follow_blend)
 
-	var look_target: Vector3 = player_ship.global_position + Vector3(0.0, 2.0, 0.0)
+	var look_target: Vector3 = player_ship.global_position + Vector3(0.0, 2.5, 0.0)
 
 	if _in_combat and _combat_enemy and is_instance_valid(_combat_enemy) and not camera_is_held:
 		var enemy_offset: Vector3 = _combat_enemy.global_position - player_ship.global_position
@@ -186,7 +199,7 @@ func _enter_combat(enemy: Node3D) -> void:
 	_in_combat = true
 	_combat_enemy = enemy
 	_combat_clear_timer = 0.0
-	_camera_idle_time = camera_return_delay
+	_camera_idle_time = 0.0
 	if player_ship and player_ship.has_method("set_combat_active"):
 		player_ship.call("set_combat_active", true)
 
