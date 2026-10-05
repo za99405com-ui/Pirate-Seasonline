@@ -22,20 +22,20 @@ var player_ship: Node3D = null
 var world_controller: Node = null
 var combat_panel: PanelContainer = null
 var combat_label: Label = null
-var dpad_root: Control = null
-var dpad_up: Button = null
-var dpad_down: Button = null
-var dpad_left: Button = null
-var dpad_right: Button = null
-var dpad_up_held: bool = false
-var dpad_down_held: bool = false
-var dpad_left_held: bool = false
-var dpad_right_held: bool = false
-var dpad_touch_vectors: Dictionary = {}
-var dpad_touch_modes: Dictionary = {}
-var mouse_dpad_active: bool = false
-var mouse_dpad_mode: String = ""
-var mouse_dpad_vector: Vector2 = Vector2.ZERO
+
+var helm_root: Control = null
+var helm_background: Panel = null
+var helm_wheel: Label = null
+var helm_status: Label = null
+var right_sailing_root: Control = null
+var sails_button: Button = null
+var anchor_button: Button = null
+
+var helm_touch_index: int = -1
+var helm_mouse_active: bool = false
+var helm_last_angle: float = 0.0
+var helm_rotation: float = 0.0
+var helm_max_rotation: float = deg_to_rad(115.0)
 
 func _ready() -> void:
 	world_controller = get_parent()
@@ -46,10 +46,10 @@ func _ready() -> void:
 	GameManager.ship_storage_changed.connect(_on_ship_storage_changed)
 
 	_apply_clean_layout()
-	_create_dpad()
+	_create_sailing_controls()
 	_create_combat_indicator()
-	if not get_viewport().size_changed.is_connected(_layout_dpad):
-		get_viewport().size_changed.connect(_layout_dpad)
+	if not get_viewport().size_changed.is_connected(_layout_sailing_controls):
+		get_viewport().size_changed.connect(_layout_sailing_controls)
 
 	_on_gold_changed(GameManager.gold)
 	var current_info := ShipProgressionData.get_level_info(GameManager.current_ship_level)
@@ -72,12 +72,14 @@ func _apply_clean_layout() -> void:
 		joystick.visible = false
 		joystick.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	# No aiming / firing UI in this clean foundation build.
-	# We are validating sailing, automatic combat detection and combat camera first.
 	if fire_left_btn:
 		fire_left_btn.visible = false
 	if fire_right_btn:
 		fire_right_btn.visible = false
+
+	var left_controls := $Controls/LeftControls as Control
+	if left_controls:
+		left_controls.visible = false
 
 	var right_controls := $Controls/RightControls as Control
 	if right_controls:
@@ -91,199 +93,245 @@ func _apply_clean_layout() -> void:
 		top_bar.offset_bottom = 64.0
 
 	if speed_panel:
-		speed_panel.offset_left = -64.0
-		speed_panel.offset_top = -58.0
-		speed_panel.offset_right = 64.0
+		speed_panel.offset_left = -92.0
+		speed_panel.offset_top = -72.0
+		speed_panel.offset_right = 92.0
 		speed_panel.offset_bottom = -18.0
 
-func _create_dpad() -> void:
+func _create_sailing_controls() -> void:
 	if not controls_root:
 		return
 
-	dpad_root = Control.new()
-	dpad_root.name = "DPad"
-	dpad_root.anchor_left = 0.0
-	dpad_root.anchor_top = 1.0
-	dpad_root.anchor_right = 0.0
-	dpad_root.anchor_bottom = 1.0
-	dpad_root.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	controls_root.add_child(dpad_root)
+	# Left: physical helm. It holds the rudder angle where the player leaves it.
+	helm_root = Control.new()
+	helm_root.name = "HelmControl"
+	helm_root.anchor_left = 0.0
+	helm_root.anchor_top = 1.0
+	helm_root.anchor_right = 0.0
+	helm_root.anchor_bottom = 1.0
+	helm_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	controls_root.add_child(helm_root)
 
-	# Only four visible buttons. Sliding one finger between them blends the movement.
-	dpad_up = _make_dpad_button("▲")
-	dpad_down = _make_dpad_button("▼")
-	dpad_left = _make_dpad_button("◀")
-	dpad_right = _make_dpad_button("▶")
+	helm_background = Panel.new()
+	helm_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var helm_style := StyleBoxFlat.new()
+	helm_style.bg_color = Color(0.055, 0.033, 0.018, 0.82)
+	helm_style.border_width_left = 3
+	helm_style.border_width_top = 3
+	helm_style.border_width_right = 3
+	helm_style.border_width_bottom = 3
+	helm_style.border_color = Color(0.64, 0.39, 0.15, 0.95)
+	helm_style.corner_radius_top_left = 120
+	helm_style.corner_radius_top_right = 120
+	helm_style.corner_radius_bottom_left = 120
+	helm_style.corner_radius_bottom_right = 120
+	helm_background.add_theme_stylebox_override("panel", helm_style)
+	helm_root.add_child(helm_background)
 
-	for button in [dpad_up, dpad_down, dpad_left, dpad_right]:
-		dpad_root.add_child(button)
-		button.toggle_mode = true
-		button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	helm_wheel = Label.new()
+	helm_wheel.text = "⎈"
+	helm_wheel.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	helm_wheel.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	helm_wheel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	helm_wheel.add_theme_font_size_override("font_size", 128)
+	helm_wheel.add_theme_color_override("font_color", Color(0.82, 0.52, 0.22, 1.0))
+	helm_root.add_child(helm_wheel)
 
-	_layout_dpad()
+	helm_status = Label.new()
+	helm_status.text = "RUDDER  0°"
+	helm_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	helm_status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	helm_status.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	helm_status.add_theme_font_size_override("font_size", 15)
+	helm_status.add_theme_color_override("font_color", Color(1.0, 0.90, 0.66, 1.0))
+	helm_root.add_child(helm_status)
 
-func _make_dpad_button(symbol: String) -> Button:
+	# Right: one sail control plus a separate anchor.
+	right_sailing_root = Control.new()
+	right_sailing_root.name = "SailingActions"
+	right_sailing_root.anchor_left = 1.0
+	right_sailing_root.anchor_top = 1.0
+	right_sailing_root.anchor_right = 1.0
+	right_sailing_root.anchor_bottom = 1.0
+	controls_root.add_child(right_sailing_root)
+
+	sails_button = _make_action_button("SAILS\nFURLED")
+	anchor_button = _make_action_button("⚓  ANCHOR\nREADY")
+	right_sailing_root.add_child(sails_button)
+	right_sailing_root.add_child(anchor_button)
+	sails_button.pressed.connect(_cycle_sails)
+	anchor_button.pressed.connect(_toggle_anchor)
+
+	_layout_sailing_controls()
+
+func _make_action_button(text_value: String) -> Button:
 	var button := Button.new()
-	button.text = symbol
+	button.text = text_value
 	button.focus_mode = Control.FOCUS_NONE
-	button.add_theme_font_size_override("font_size", 32)
+	button.add_theme_font_size_override("font_size", 18)
+	button.add_theme_color_override("font_color", Color(1.0, 0.91, 0.68, 1.0))
 
 	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.025, 0.07, 0.12, 0.78)
+	normal.bg_color = Color(0.025, 0.06, 0.09, 0.88)
 	normal.border_width_left = 2
 	normal.border_width_top = 2
 	normal.border_width_right = 2
 	normal.border_width_bottom = 2
-	normal.border_color = Color(0.86, 0.68, 0.24, 0.82)
-	normal.corner_radius_top_left = 20
-	normal.corner_radius_top_right = 20
-	normal.corner_radius_bottom_left = 20
-	normal.corner_radius_bottom_right = 20
+	normal.border_color = Color(0.78, 0.58, 0.22, 0.90)
+	normal.corner_radius_top_left = 18
+	normal.corner_radius_top_right = 18
+	normal.corner_radius_bottom_left = 18
+	normal.corner_radius_bottom_right = 18
 
 	var pressed := normal.duplicate() as StyleBoxFlat
-	pressed.bg_color = Color(0.24, 0.15, 0.045, 0.96)
-	pressed.border_color = Color(1.0, 0.86, 0.34, 1.0)
+	pressed.bg_color = Color(0.25, 0.15, 0.045, 0.98)
+	pressed.border_color = Color(1.0, 0.84, 0.32, 1.0)
 
 	button.add_theme_stylebox_override("normal", normal)
 	button.add_theme_stylebox_override("hover", normal)
 	button.add_theme_stylebox_override("pressed", pressed)
-	button.add_theme_color_override("font_color", Color(1.0, 0.92, 0.60, 1.0))
 	return button
 
-func _layout_dpad() -> void:
-	if not dpad_root:
+func _layout_sailing_controls() -> void:
+	if not helm_root or not right_sailing_root:
 		return
 
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	var dpad_size: float = clampf(viewport_size.y * 0.44, 270.0, 350.0)
-	var button_size: float = dpad_size * 0.26
-	var center: float = dpad_size * 0.5
-	var half_button: float = button_size * 0.5
-	var far: float = dpad_size - button_size
-	var edge: float = 16.0
+	var wheel_size: float = clampf(viewport_size.y * 0.31, 190.0, 245.0)
+	var edge: float = 22.0
 
-	dpad_root.offset_left = edge
-	dpad_root.offset_top = -dpad_size - edge
-	dpad_root.offset_right = edge + dpad_size
-	dpad_root.offset_bottom = -edge
+	helm_root.offset_left = edge
+	helm_root.offset_top = -wheel_size - edge
+	helm_root.offset_right = edge + wheel_size
+	helm_root.offset_bottom = -edge
 
-	_place_dpad_button(dpad_up, center - half_button, 0.0, button_size)
-	_place_dpad_button(dpad_down, center - half_button, far, button_size)
-	_place_dpad_button(dpad_left, 0.0, center - half_button, button_size)
-	_place_dpad_button(dpad_right, far, center - half_button, button_size)
+	helm_background.position = Vector2.ZERO
+	helm_background.size = Vector2(wheel_size, wheel_size)
+	helm_wheel.position = Vector2.ZERO
+	helm_wheel.size = Vector2(wheel_size, wheel_size)
+	helm_wheel.pivot_offset = Vector2(wheel_size * 0.5, wheel_size * 0.5)
+	helm_status.position = Vector2(0.0, wheel_size - 34.0)
+	helm_status.size = Vector2(wheel_size, 28.0)
 
-func _place_dpad_button(button: Button, x: float, y: float, button_size: float) -> void:
-	if not button:
-		return
-	button.position = Vector2(x, y)
-	button.size = Vector2(button_size, button_size)
-	button.custom_minimum_size = Vector2(button_size, button_size)
+	var action_width: float = clampf(viewport_size.x * 0.17, 150.0, 190.0)
+	var sail_height: float = 92.0
+	var anchor_height: float = 78.0
+	var gap: float = 16.0
+	var total_height: float = sail_height + gap + anchor_height
+
+	right_sailing_root.offset_left = -action_width - edge
+	right_sailing_root.offset_top = -total_height - edge
+	right_sailing_root.offset_right = -edge
+	right_sailing_root.offset_bottom = -edge
+
+	sails_button.position = Vector2(0.0, 0.0)
+	sails_button.size = Vector2(action_width, sail_height)
+	anchor_button.position = Vector2(0.0, sail_height + gap)
+	anchor_button.size = Vector2(action_width, anchor_height)
 
 func _input(event: InputEvent) -> void:
-	# Start on one of the four arrows. If the finger starts on forward/back,
-	# sliding sideways keeps full throttle and adds rudder instead of weakening speed.
+	if not helm_root:
+		return
+
 	if event is InputEventScreenTouch:
 		var touch := event as InputEventScreenTouch
-		if touch.pressed:
-			var mode := _dpad_start_mode(touch.position)
-			if not mode.is_empty():
-				dpad_touch_modes[touch.index] = mode
-				dpad_touch_vectors[touch.index] = _dpad_vector_for_drag(mode, touch.position)
-				get_viewport().set_input_as_handled()
-		else:
-			if dpad_touch_modes.has(touch.index):
-				dpad_touch_modes.erase(touch.index)
-				dpad_touch_vectors.erase(touch.index)
-				get_viewport().set_input_as_handled()
-		_refresh_dpad_input()
+		if touch.pressed and helm_touch_index == -1 and helm_root.get_global_rect().has_point(touch.position):
+			helm_touch_index = touch.index
+			helm_last_angle = _helm_pointer_angle(touch.position)
+			get_viewport().set_input_as_handled()
+		elif not touch.pressed and touch.index == helm_touch_index:
+			helm_touch_index = -1
+			get_viewport().set_input_as_handled()
 	elif event is InputEventScreenDrag:
 		var drag := event as InputEventScreenDrag
-		if dpad_touch_modes.has(drag.index):
-			var mode := String(dpad_touch_modes[drag.index])
-			dpad_touch_vectors[drag.index] = _dpad_vector_for_drag(mode, drag.position)
+		if drag.index == helm_touch_index:
+			_turn_helm_to_pointer(drag.position)
 			get_viewport().set_input_as_handled()
-			_refresh_dpad_input()
 	elif event is InputEventMouseButton:
 		var mouse := event as InputEventMouseButton
 		if mouse.button_index == MOUSE_BUTTON_LEFT:
-			if mouse.pressed:
-				mouse_dpad_mode = _dpad_start_mode(mouse.position)
-				mouse_dpad_active = not mouse_dpad_mode.is_empty()
-				if mouse_dpad_active:
-					mouse_dpad_vector = _dpad_vector_for_drag(mouse_dpad_mode, mouse.position)
-			else:
-				mouse_dpad_active = false
-				mouse_dpad_mode = ""
-				mouse_dpad_vector = Vector2.ZERO
-			_refresh_dpad_input()
-	elif event is InputEventMouseMotion and mouse_dpad_active:
+			if mouse.pressed and helm_root.get_global_rect().has_point(mouse.position):
+				helm_mouse_active = true
+				helm_last_angle = _helm_pointer_angle(mouse.position)
+				get_viewport().set_input_as_handled()
+			elif not mouse.pressed and helm_mouse_active:
+				helm_mouse_active = false
+				get_viewport().set_input_as_handled()
+	elif event is InputEventMouseMotion and helm_mouse_active:
 		var motion := event as InputEventMouseMotion
-		mouse_dpad_vector = _dpad_vector_for_drag(mouse_dpad_mode, motion.position)
-		_refresh_dpad_input()
+		_turn_helm_to_pointer(motion.position)
+		get_viewport().set_input_as_handled()
 
-func _dpad_start_mode(screen_position: Vector2) -> String:
-	if dpad_up and dpad_up.get_global_rect().has_point(screen_position):
-		return "up"
-	if dpad_down and dpad_down.get_global_rect().has_point(screen_position):
-		return "down"
-	if dpad_left and dpad_left.get_global_rect().has_point(screen_position):
-		return "left"
-	if dpad_right and dpad_right.get_global_rect().has_point(screen_position):
-		return "right"
-	return ""
-
-func _dpad_vector_for_drag(mode: String, screen_position: Vector2) -> Vector2:
-	if not dpad_root:
-		return Vector2.ZERO
-
-	var rect: Rect2 = dpad_root.get_global_rect()
+func _helm_pointer_angle(screen_position: Vector2) -> float:
+	var rect: Rect2 = helm_root.get_global_rect()
 	var center: Vector2 = rect.position + rect.size * 0.5
-	var horizontal_range: float = maxf(rect.size.x * 0.44, 1.0)
-	var steer: float = clampf((screen_position.x - center.x) / horizontal_range, -1.0, 1.0)
+	var offset: Vector2 = screen_position - center
+	return atan2(offset.y, offset.x)
 
-	match mode:
-		"up":
-			return Vector2(steer * 0.68, -1.0)
-		"down":
-			return Vector2(steer * 0.68, 1.0)
-		"left":
-			return Vector2(-1.0, 0.0)
-		"right":
-			return Vector2(1.0, 0.0)
-	return Vector2.ZERO
+func _turn_helm_to_pointer(screen_position: Vector2) -> void:
+	var new_angle: float = _helm_pointer_angle(screen_position)
+	var delta_angle: float = wrapf(new_angle - helm_last_angle, -PI, PI)
+	helm_last_angle = new_angle
+	helm_rotation = clampf(helm_rotation + delta_angle, -helm_max_rotation, helm_max_rotation)
 
-func _refresh_dpad_input() -> void:
-	var combined := Vector2.ZERO
-	for value in dpad_touch_vectors.values():
-		if value is Vector2:
-			combined += value as Vector2
-	if mouse_dpad_active:
-		combined += mouse_dpad_vector
+	if helm_wheel:
+		helm_wheel.rotation = helm_rotation
 
-	# Clamp each axis separately: forward + rudder must keep full forward throttle.
-	combined.x = clampf(combined.x, -1.0, 1.0)
-	combined.y = clampf(combined.y, -1.0, 1.0)
+	var rudder_value: float = clampf(helm_rotation / helm_max_rotation, -1.0, 1.0)
+	if player_ship and is_instance_valid(player_ship) and player_ship.has_method("set_rudder_input"):
+		player_ship.call("set_rudder_input", rudder_value)
+	_update_helm_status(rudder_value)
 
-	dpad_left_held = combined.x < -0.18
-	dpad_right_held = combined.x > 0.18
-	dpad_up_held = combined.y < -0.18
-	dpad_down_held = combined.y > 0.18
-
-	if dpad_up:
-		dpad_up.set_pressed_no_signal(dpad_up_held)
-	if dpad_down:
-		dpad_down.set_pressed_no_signal(dpad_down_held)
-	if dpad_left:
-		dpad_left.set_pressed_no_signal(dpad_left_held)
-	if dpad_right:
-		dpad_right.set_pressed_no_signal(dpad_right_held)
-
-	_send_dpad_vector(combined)
-
-func _send_dpad_vector(input_vector: Vector2) -> void:
-	if not player_ship or not is_instance_valid(player_ship) or not player_ship.has_method("set_joystick_input"):
+func _update_helm_status(rudder_value: float) -> void:
+	if not helm_status:
 		return
-	player_ship.call("set_joystick_input", input_vector)
+	var degrees_value: int = int(round(absf(rudder_value) * 35.0))
+	if absf(rudder_value) < 0.04:
+		helm_status.text = "RUDDER  0°"
+	elif rudder_value > 0.0:
+		helm_status.text = "RUDDER  %d°  RIGHT" % degrees_value
+	else:
+		helm_status.text = "RUDDER  %d°  LEFT" % degrees_value
+
+func _cycle_sails() -> void:
+	if not player_ship or not is_instance_valid(player_ship) or not player_ship.has_method("get_sail_level"):
+		return
+	var current_level: int = int(player_ship.call("get_sail_level"))
+	var next_level: int = (current_level + 1) % 3
+	player_ship.call("set_sail_level", next_level)
+	_update_sailing_buttons()
+
+func _toggle_anchor() -> void:
+	if not player_ship or not is_instance_valid(player_ship) or not player_ship.has_method("toggle_anchor"):
+		return
+	player_ship.call("toggle_anchor")
+	_update_sailing_buttons()
+
+func _update_sailing_buttons() -> void:
+	if not player_ship or not is_instance_valid(player_ship):
+		return
+
+	if sails_button and player_ship.has_method("get_sail_level"):
+		var sail_level: int = int(player_ship.call("get_sail_level"))
+		match sail_level:
+			1:
+				sails_button.text = "SAILS\nHALF"
+			2:
+				sails_button.text = "SAILS\nFULL"
+			_:
+				sails_button.text = "SAILS\nFURLED"
+
+	if anchor_button and player_ship.has_method("is_anchor_deployed"):
+		var deployed: bool = bool(player_ship.call("is_anchor_deployed"))
+		var set_now: bool = false
+		if player_ship.has_method("is_anchor_set"):
+			set_now = bool(player_ship.call("is_anchor_set"))
+		if not deployed:
+			anchor_button.text = "⚓  ANCHOR\nREADY"
+		elif set_now:
+			anchor_button.text = "⚓  ANCHOR\nSET"
+		else:
+			anchor_button.text = "⚓  ANCHOR\nDROPPING..."
 
 func _create_combat_indicator() -> void:
 	combat_panel = PanelContainer.new()
@@ -322,6 +370,7 @@ func set_player(player: Node3D) -> void:
 	player_ship = player
 	if player_ship and "storage" in player_ship and player_ship.storage:
 		_on_ship_storage_changed(player_ship.storage.used_storage, player_ship.storage.storage_capacity)
+	_update_sailing_buttons()
 
 func _process(_delta: float) -> void:
 	if not player_ship or not is_instance_valid(player_ship):
@@ -332,11 +381,19 @@ func _process(_delta: float) -> void:
 		var travel_active: bool = false
 		if player_ship.has_method("is_travel_mode"):
 			travel_active = bool(player_ship.call("is_travel_mode"))
-		if travel_active:
-			speed_label.text = "TRAVEL ×1.5  •  %.1f kn" % speed_value
-		else:
-			speed_label.text = "%.1f kn" % speed_value
 
+		var sail_name: String = "FURLED"
+		if player_ship.has_method("get_sail_level"):
+			match int(player_ship.call("get_sail_level")):
+				1:
+					sail_name = "HALF SAIL"
+				2:
+					sail_name = "FULL SAIL"
+
+		var prefix: String = "TRAVEL ×1.5  •  " if travel_active else ""
+		speed_label.text = "%s%.1f kn\n%s" % [prefix, speed_value, sail_name]
+
+	_update_sailing_buttons()
 	_update_combat_indicator()
 	_update_upgrade_button()
 
@@ -408,4 +465,3 @@ func _show_notification(text: String) -> void:
 	tween.tween_property(notification_banner, "modulate:a", 1.0, 0.20)
 	tween.tween_interval(1.2)
 	tween.tween_property(notification_banner, "modulate:a", 0.0, 0.30)
-
