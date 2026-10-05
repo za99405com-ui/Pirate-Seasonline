@@ -124,8 +124,13 @@ func _handle_movement(delta: float) -> void:
 	var steering_speed_base: float = lerpf(max_speed, max_speed * travel_speed_multiplier, travel_blend)
 	var speed_ratio: float = clampf(absf(current_forward_speed) / maxf(steering_speed_base, 0.01), 0.0, 1.0)
 	var steering_authority: float = lerpf(0.18, 1.0, speed_ratio)
+
+	# Side-only steering makes a tighter circle.
+	# Forward/back + side makes a wider sailing arc, like a ship carrying momentum.
+	var throttle_load: float = clampf(absf(smoothed_throttle), 0.0, 1.0)
+	var turn_arc_factor: float = lerpf(1.28, 0.68, throttle_load)
 	if absf(smoothed_rudder) > 0.01:
-		rotation.y -= smoothed_rudder * turn_speed * steering_authority * delta
+		rotation.y -= smoothed_rudder * turn_speed * steering_authority * turn_arc_factor * delta
 
 	velocity = -transform.basis.z * current_forward_speed
 	velocity.y = 0.0
