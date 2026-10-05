@@ -12,6 +12,10 @@ extends Node3D
 @export var camera_orbit_sensitivity: float = 0.006
 @export var camera_min_pitch: float = 0.28
 @export var camera_max_pitch: float = 1.05
+@export var camera_default_pitch: float = 0.52
+@export var camera_return_delay: float = 0.45
+@export var camera_return_speed: float = 3.6
+@export var camera_move_return_delay: float = 0.12
 @export var defense_alert_distance: float = 52.0
 @export var target_lock_distance: float = 90.0
 
@@ -21,6 +25,7 @@ var _camera_yaw: float = 0.0
 var _camera_pitch: float = 0.52
 var _camera_drag_touch: int = -1
 var _mouse_orbiting: bool = false
+var _camera_idle_time: float = 0.0
 var _combat_target: Node3D = null
 
 func _ready() -> void:
@@ -33,6 +38,7 @@ func _ready() -> void:
 
 	# Start from a useful rear-quarter angle, then leave camera control fully to the player.
 	_camera_yaw = player_ship.global_rotation.y if player_ship else 0.0
+	_camera_pitch = camera_default_pitch
 	_snap_camera_to_player()
 
 func _physics_process(delta: float) -> void:
@@ -47,8 +53,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		var touch := event as InputEventScreenTouch
 		if touch.pressed and _camera_drag_touch == -1:
 			_camera_drag_touch = touch.index
+			_camera_idle_time = 0.0
 		elif not touch.pressed and touch.index == _camera_drag_touch:
 			_camera_drag_touch = -1
+			_camera_idle_time = 0.0
 	elif event is InputEventScreenDrag:
 		var drag := event as InputEventScreenDrag
 		if drag.index == _camera_drag_touch:
@@ -57,12 +65,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		var mouse_button := event as InputEventMouseButton
 		if mouse_button.button_index == MOUSE_BUTTON_LEFT:
 			_mouse_orbiting = mouse_button.pressed
+			_camera_idle_time = 0.0
 	elif event is InputEventMouseMotion:
 		var motion := event as InputEventMouseMotion
 		if _mouse_orbiting:
 			_apply_camera_drag(motion.relative)
 
 func _apply_camera_drag(relative: Vector2) -> void:
+	_camera_idle_time = 0.0
 	_camera_yaw -= relative.x * camera_orbit_sensitivity
 	_camera_pitch = clampf(
 		_camera_pitch + relative.y * camera_orbit_sensitivity,
@@ -81,12 +91,34 @@ func _update_camera(delta: float) -> void:
 	if not player_ship or not is_instance_valid(player_ship) or not camera:
 		return
 
+	var camera_is_held: bool = _camera_drag_touch != -1 or _mouse_orbiting
+
+	# "Magnetic" rear camera:
+	# while the player is touching the camera it is fully free.
+	# once released, it smoothly returns behind the ship.
+	# target lock intentionally disables this auto-return so combat framing stays where the player left it.
+	if camera_is_held:
+		_camera_idle_time = 0.0
+	elif not (_combat_target and is_instance_valid(_combat_target)):
+		_camera_idle_time += delta
+
+		var ship_is_moving: bool = false
+		if player_ship is CharacterBody3D:
+			var body := player_ship as CharacterBody3D
+			ship_is_moving = body.velocity.length() > 0.35
+
+		var active_delay: float = camera_move_return_delay if ship_is_moving else camera_return_delay
+		if _camera_idle_time >= active_delay:
+			var return_blend: float = 1.0 - exp(-camera_return_speed * delta)
+			_camera_yaw = lerp_angle(_camera_yaw, player_ship.global_rotation.y, return_blend)
+			_camera_pitch = lerpf(_camera_pitch, camera_default_pitch, return_blend)
+	else:
+		_camera_idle_time = 0.0
+
 	var ideal_pos: Vector3 = player_ship.global_position + _get_camera_offset()
 	var smoothing: float = 1.0 - exp(-camera_follow_speed * delta)
 	camera.global_position = camera.global_position.lerp(ideal_pos, smoothing)
 
-	# Camera remains free even while target lock is active.
-	# Lock affects aiming/target state, not the player's camera control.
 	var look_target: Vector3 = player_ship.global_position + Vector3(0.0, 2.0, 0.0)
 	camera.look_at(look_target, Vector3.UP)
 	camera.fov = lerpf(camera.fov, camera_fov, 1.0 - exp(-5.0 * delta))
