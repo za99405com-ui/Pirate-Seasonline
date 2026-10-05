@@ -13,6 +13,8 @@ signal ship_level_upgraded(new_level: int, title: String)
 @export var water_drag: float = 0.35
 @export var throttle_response: float = 2.6
 @export var rudder_response: float = 3.8
+@export var steering_min_speed_ratio: float = 0.08
+@export var steering_full_speed_ratio: float = 0.48
 
 @export_group("Travel Mode")
 @export var travel_entry_distance: float = 22.0
@@ -123,13 +125,15 @@ func _handle_movement(delta: float) -> void:
 
 	var steering_speed_base: float = lerpf(max_speed, max_speed * travel_speed_multiplier, travel_blend)
 	var speed_ratio: float = clampf(absf(current_forward_speed) / maxf(steering_speed_base, 0.01), 0.0, 1.0)
-	var steering_authority: float = lerpf(0.18, 1.0, speed_ratio)
 
-	# Side-only steering makes a tighter circle.
-	# Forward/back + side makes a wider sailing arc, like a ship carrying momentum.
+	# The rudder needs water flow. At a standstill the ship cannot spin around its center.
+	var steering_authority: float = smoothstep(steering_min_speed_ratio, steering_full_speed_ratio, speed_ratio)
+
+	# Side-only input gives the strongest rudder and therefore a tighter turning circle.
+	# Forward/back + side keeps more longitudinal drive, producing a wider sailing arc.
 	var throttle_load: float = clampf(absf(smoothed_throttle), 0.0, 1.0)
-	var turn_arc_factor: float = lerpf(1.28, 0.68, throttle_load)
-	if absf(smoothed_rudder) > 0.01:
+	var turn_arc_factor: float = lerpf(1.25, 0.64, throttle_load)
+	if absf(smoothed_rudder) > 0.01 and steering_authority > 0.001:
 		rotation.y -= smoothed_rudder * turn_speed * steering_authority * turn_arc_factor * delta
 
 	velocity = -transform.basis.z * current_forward_speed
