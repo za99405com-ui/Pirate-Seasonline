@@ -220,42 +220,12 @@ func _fire_broadside(direction: Vector3, marker_parent: Node3D) -> void:
 			_spawn_single_ball(marker.global_position, spread_dir)
 
 func _get_aim_assisted_direction(base_direction: Vector3) -> Vector3:
+	# The broadside direction is already clamped to the ship's firing arc.
+	# Aim assist may nudge toward an enemy, but it must never escape that arc.
 	var desired_direction: Vector3 = Vector3(base_direction.x, 0.0, base_direction.z).normalized()
-
-	# Manual aim stick takes priority while it is being held.
-	if manual_aim_direction.length_squared() > 0.0001:
-		desired_direction = manual_aim_direction
-
-		# Gentle assist around the manually selected direction.
-		var manual_best: Vector3 = desired_direction
-		var manual_best_angle: float = deg_to_rad(14.0)
-		for enemy in get_tree().get_nodes_in_group("enemies"):
-			if not enemy is Node3D or not is_instance_valid(enemy):
-				continue
-			var enemy_node := enemy as Node3D
-			var to_enemy: Vector3 = enemy_node.global_position - global_position
-			to_enemy.y = 0.0
-			var distance: float = to_enemy.length()
-			if distance <= 0.01 or distance > aim_assist_range * 1.25:
-				continue
-			var candidate: Vector3 = to_enemy / distance
-			var angle: float = desired_direction.angle_to(candidate)
-			if angle < manual_best_angle:
-				manual_best_angle = angle
-				manual_best = candidate
-		return manual_best
-
-	# When the aim stick is neutral, a locked target gets priority.
-	if combat_target and is_instance_valid(combat_target):
-		var locked_vector: Vector3 = combat_target.global_position - global_position
-		locked_vector.y = 0.0
-		var locked_distance: float = locked_vector.length()
-		if locked_distance > 0.01 and locked_distance <= aim_assist_range * 1.5:
-			return locked_vector / locked_distance
-
-	# Otherwise keep a small automatic broadside assist.
 	var best_direction: Vector3 = desired_direction
-	var best_angle: float = deg_to_rad(aim_assist_degrees)
+	var assist_angle: float = deg_to_rad(14.0 if manual_aim_direction.length_squared() > 0.0001 else aim_assist_degrees)
+
 	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if not enemy is Node3D or not is_instance_valid(enemy):
 			continue
@@ -267,8 +237,8 @@ func _get_aim_assisted_direction(base_direction: Vector3) -> Vector3:
 			continue
 		var candidate: Vector3 = to_enemy / distance
 		var angle: float = desired_direction.angle_to(candidate)
-		if angle < best_angle:
-			best_angle = angle
+		if angle < assist_angle:
+			assist_angle = angle
 			best_direction = candidate
 
 	return best_direction
