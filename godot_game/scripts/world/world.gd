@@ -5,21 +5,22 @@ extends Node3D
 @onready var hud: CanvasLayer = $HUD
 @onready var ocean: MeshInstance3D = $OceanPlane
 
-@export_group("Combat Camera")
-@export var camera_distance: float = 25.0
-@export var camera_height: float = 14.0
-@export var camera_look_ahead: float = 7.5
-@export var camera_follow_speed: float = 4.2
-@export var camera_rotation_speed: float = 3.4
+@export_group("Free Combat Camera")
+@export var camera_distance: float = 28.0
+@export var camera_follow_speed: float = 5.0
 @export var camera_fov: float = 58.0
+@export var camera_orbit_sensitivity: float = 0.006
+@export var camera_min_pitch: float = 0.28
+@export var camera_max_pitch: float = 1.05
 @export var defense_alert_distance: float = 52.0
 @export var target_lock_distance: float = 90.0
 
 @export var enemy_ship_scene: PackedScene = preload("res://scenes/ships/enemy_ship.tscn")
 
-var _current_camera_yaw: float = 0.0
-var _is_camera_initialized: bool = false
-var _camera_zoom: float = 1.0
+var _camera_yaw: float = 0.0
+var _camera_pitch: float = 0.52
+var _camera_drag_touch: int = -1
+var _mouse_orbiting: bool = false
 var _combat_target: Node3D = null
 
 func _ready() -> void:
@@ -30,6 +31,8 @@ func _ready() -> void:
 	if camera:
 		camera.fov = camera_fov
 
+	# Start from a useful rear-quarter angle, then leave camera control fully to the player.
+	_camera_yaw = player_ship.global_rotation.y if player_ship else 0.0
 	_snap_camera_to_player()
 
 func _physics_process(delta: float) -> void:
@@ -38,79 +41,86 @@ func _physics_process(delta: float) -> void:
 	_update_ocean_anchor()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton:
-		var mouse_event := event as InputEventMouseButton
-		if mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			adjust_camera_zoom(-0.10)
-		elif mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			adjust_camera_zoom(0.10)
-		elif mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_LEFT:
-			_try_select_target_at_screen(mouse_event.position)
-	elif event is InputEventScreenTouch:
-		var touch_event := event as InputEventScreenTouch
-		if touch_event.pressed:
-			_try_select_target_at_screen(touch_event.position)
+	# Empty-screen drag rotates the camera freely around the player's ship.
+	# GUI controls consume their own touches, so movement/aim/fire controls do not fight the camera.
+	if event is InputEventScreenTouch:
+		var touch := event as InputEventScreenTouch
+		if touch.pressed and _camera_drag_touch == -1:
+			_camera_drag_touch = touch.index
+		elif not touch.pressed and touch.index == _camera_drag_touch:
+			_camera_drag_touch = -1
+	elif event is InputEventScreenDrag:
+		var drag := event as InputEventScreenDrag
+		if drag.index == _camera_drag_touch:
+			_apply_camera_drag(drag.relative)
+	elif event is InputEventMouseButton:
+		var mouse_button := event as InputEventMouseButton
+		if mouse_button.button_index == MOUSE_BUTTON_LEFT:
+			_mouse_orbiting = mouse_button.pressed
+	elif event is InputEventMouseMotion:
+		var motion := event as InputEventMouseMotion
+		if _mouse_orbiting:
+			_apply_camera_drag(motion.relative)
+
+func _apply_camera_drag(relative: Vector2) -> void:
+	_camera_yaw -= relative.x * camera_orbit_sensitivity
+	_camera_pitch = clampf(
+		_camera_pitch + relative.y * camera_orbit_sensitivity,
+		camera_min_pitch,
+		camera_max_pitch
+	)
 
 func _snap_camera_to_player() -> void:
 	if not player_ship or not is_instance_valid(player_ship) or not camera:
 		return
 
-	_current_camera_yaw = player_ship.global_rotation.y
-	var forward: Vector3 = -player_ship.global_transform.basis.z.normalized()
-	var backward: Vector3 = -forward
-	var distance: float = camera_distance * _camera_zoom
-	var height: float = camera_height * _camera_zoom
-
-	camera.global_position = player_ship.global_position + backward * distance + Vector3(0.0, height, 0.0)
-	var look_target: Vector3 = player_ship.global_position + forward * camera_look_ahead + Vector3(0.0, 2.0, 0.0)
-	camera.look_at(look_target, Vector3.UP)
-	_is_camera_initialized = true
+	camera.global_position = player_ship.global_position + _get_camera_offset()
+	camera.look_at(player_ship.global_position + Vector3(0.0, 2.0, 0.0), Vector3.UP)
 
 func _update_camera(delta: float) -> void:
 	if not player_ship or not is_instance_valid(player_ship) or not camera:
 		return
 
-	if not _is_camera_initialized:
-		_snap_camera_to_player()
-		return
+	var ideal_pos: Vector3 = player_ship.global_position + _get_camera_offset()
+	var smoothing: float = 1.0 - exp(-camera_follow_speed * delta)
+	camera.global_position = camera.global_position.lerp(ideal_pos, smoothing)
 
-	var target_yaw: float = player_ship.global_rotation.y
-	var yaw_smoothing: float = 1.0 - exp(-camera_rotation_speed * delta)
-	_current_camera_yaw = lerp_angle(_current_camera_yaw, target_yaw, yaw_smoothing)
-
-	var forward: Vector3 = Vector3(-sin(_current_camera_yaw), 0.0, -cos(_current_camera_yaw)).normalized()
-	var backward: Vector3 = -forward
-	var speed_ratio: float = 0.0
-	if player_ship is CharacterBody3D:
-		var player_body := player_ship as CharacterBody3D
-		speed_ratio = clampf(player_body.velocity.length() / 14.5, 0.0, 1.0)
-
-	var desired_distance: float = camera_distance * _camera_zoom
-	var desired_height: float = camera_height * _camera_zoom
-	var look_target: Vector3
-
-	if _combat_target and is_instance_valid(_combat_target):
-		var target_distance: float = player_ship.global_position.distance_to(_combat_target.global_position)
-		var framing_extra: float = clampf(target_distance * 0.16, 0.0, 12.0)
-		desired_distance = maxf(desired_distance, 18.0 + framing_extra)
-		desired_height = maxf(desired_height, 11.0 + framing_extra * 0.48)
-		look_target = player_ship.global_position.lerp(_combat_target.global_position, 0.46) + Vector3(0.0, 2.0, 0.0)
-		camera.fov = lerpf(camera.fov, minf(66.0, camera_fov + target_distance * 0.10), 1.0 - exp(-4.0 * delta))
-	else:
-		var dynamic_look_ahead: float = camera_look_ahead + speed_ratio * 3.5
-		look_target = player_ship.global_position + forward * dynamic_look_ahead + Vector3(0.0, 2.2, 0.0)
-		camera.fov = lerpf(camera.fov, camera_fov, 1.0 - exp(-4.0 * delta))
-
-	var ideal_pos: Vector3 = player_ship.global_position + backward * desired_distance + Vector3(0.0, desired_height, 0.0)
-	var pos_smoothing: float = 1.0 - exp(-camera_follow_speed * delta)
-	camera.global_position = camera.global_position.lerp(ideal_pos, pos_smoothing)
+	# Camera remains free even while target lock is active.
+	# Lock affects aiming/target state, not the player's camera control.
+	var look_target: Vector3 = player_ship.global_position + Vector3(0.0, 2.0, 0.0)
 	camera.look_at(look_target, Vector3.UP)
+	camera.fov = lerpf(camera.fov, camera_fov, 1.0 - exp(-5.0 * delta))
 
-func adjust_camera_zoom(amount: float) -> void:
-	_camera_zoom = clampf(_camera_zoom + amount, 0.62, 1.45)
+func _get_camera_offset() -> Vector3:
+	var horizontal: float = cos(_camera_pitch) * camera_distance
+	var height: float = sin(_camera_pitch) * camera_distance
+	return Vector3(
+		sin(_camera_yaw) * horizontal,
+		height,
+		cos(_camera_yaw) * horizontal
+	)
 
-func get_camera_zoom() -> float:
-	return _camera_zoom
+func screen_aim_to_world(input_vector: Vector2) -> Vector3:
+	if not camera or input_vector.length() < 0.08:
+		return Vector3.ZERO
+
+	var cam_forward: Vector3 = -camera.global_transform.basis.z
+	cam_forward.y = 0.0
+	if cam_forward.length_squared() < 0.0001:
+		cam_forward = Vector3.FORWARD
+	else:
+		cam_forward = cam_forward.normalized()
+
+	var cam_right: Vector3 = camera.global_transform.basis.x
+	cam_right.y = 0.0
+	if cam_right.length_squared() < 0.0001:
+		cam_right = Vector3.RIGHT
+	else:
+		cam_right = cam_right.normalized()
+
+	# Up on the aim stick means "toward the top of the screen".
+	var result: Vector3 = cam_right * input_vector.x + cam_forward * -input_vector.y
+	return result.normalized() if result.length_squared() > 0.0001 else Vector3.ZERO
 
 func toggle_combat_target() -> void:
 	if _combat_target and is_instance_valid(_combat_target):
@@ -148,6 +158,7 @@ func _set_combat_target(target: Node3D) -> void:
 func _validate_combat_target() -> void:
 	if not _combat_target:
 		return
+
 	if not is_instance_valid(_combat_target):
 		_combat_target = null
 		if player_ship and is_instance_valid(player_ship) and player_ship.has_method("set_combat_target"):
@@ -172,36 +183,18 @@ func _find_nearest_enemy(max_distance: float) -> Node3D:
 	for candidate in get_tree().get_nodes_in_group("enemies"):
 		if not candidate is Node3D or not is_instance_valid(candidate):
 			continue
+
 		var enemy := candidate as Node3D
 		var dead_value: Variant = enemy.get("is_dead")
 		if dead_value is bool and bool(dead_value):
 			continue
+
 		var distance: float = player_ship.global_position.distance_to(enemy.global_position)
 		if distance < best_distance:
 			best_distance = distance
 			best_enemy = enemy
 
 	return best_enemy
-
-func _try_select_target_at_screen(screen_position: Vector2) -> void:
-	if not camera:
-		return
-
-	var ray_origin: Vector3 = camera.project_ray_origin(screen_position)
-	var ray_direction: Vector3 = camera.project_ray_normal(screen_position)
-	var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_direction * 500.0)
-	query.collide_with_bodies = true
-	query.collide_with_areas = false
-
-	var result: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
-	if result.is_empty():
-		return
-
-	var collider: Variant = result.get("collider")
-	if collider is Node3D:
-		var target_node := collider as Node3D
-		if target_node.is_in_group("enemies"):
-			_set_combat_target(target_node)
 
 func _update_ocean_anchor() -> void:
 	if not ocean or not player_ship:
