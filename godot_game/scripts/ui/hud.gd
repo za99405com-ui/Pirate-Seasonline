@@ -27,6 +27,10 @@ var dpad_up: Button = null
 var dpad_down: Button = null
 var dpad_left: Button = null
 var dpad_right: Button = null
+var dpad_up_left: Button = null
+var dpad_up_right: Button = null
+var dpad_down_left: Button = null
+var dpad_down_right: Button = null
 var dpad_up_held: bool = false
 var dpad_down_held: bool = false
 var dpad_left_held: bool = false
@@ -106,15 +110,19 @@ func _create_dpad() -> void:
 	dpad_root.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	controls_root.add_child(dpad_root)
 
+	dpad_up_left = _make_dpad_button("↖")
 	dpad_up = _make_dpad_button("▲")
-	dpad_down = _make_dpad_button("▼")
+	dpad_up_right = _make_dpad_button("↗")
 	dpad_left = _make_dpad_button("◀")
 	dpad_right = _make_dpad_button("▶")
+	dpad_down_left = _make_dpad_button("↙")
+	dpad_down = _make_dpad_button("▼")
+	dpad_down_right = _make_dpad_button("↘")
 
-	for button in [dpad_up, dpad_down, dpad_left, dpad_right]:
+	for button in [dpad_up_left, dpad_up, dpad_up_right, dpad_left, dpad_right, dpad_down_left, dpad_down, dpad_down_right]:
 		dpad_root.add_child(button)
 
-	for button in [dpad_up, dpad_down, dpad_left, dpad_right]:
+	for button in [dpad_up_left, dpad_up, dpad_up_right, dpad_left, dpad_right, dpad_down_left, dpad_down, dpad_down_right]:
 		button.toggle_mode = true
 		button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -153,21 +161,26 @@ func _layout_dpad() -> void:
 		return
 
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	var dpad_size: float = clampf(viewport_size.y * 0.36, 230.0, 300.0)
-	var button_size: float = dpad_size * 0.36
+	var dpad_size: float = clampf(viewport_size.y * 0.38, 238.0, 310.0)
+	var button_size: float = dpad_size * 0.30
 	var center: float = dpad_size * 0.5
 	var half_button: float = button_size * 0.5
-	var edge: float = 18.0
+	var far: float = dpad_size - button_size
+	var edge: float = 16.0
 
 	dpad_root.offset_left = edge
 	dpad_root.offset_top = -dpad_size - edge
 	dpad_root.offset_right = edge + dpad_size
 	dpad_root.offset_bottom = -edge
 
+	_place_dpad_button(dpad_up_left, 0.0, 0.0, button_size)
 	_place_dpad_button(dpad_up, center - half_button, 0.0, button_size)
-	_place_dpad_button(dpad_down, center - half_button, dpad_size - button_size, button_size)
+	_place_dpad_button(dpad_up_right, far, 0.0, button_size)
 	_place_dpad_button(dpad_left, 0.0, center - half_button, button_size)
-	_place_dpad_button(dpad_right, dpad_size - button_size, center - half_button, button_size)
+	_place_dpad_button(dpad_right, far, center - half_button, button_size)
+	_place_dpad_button(dpad_down_left, 0.0, far, button_size)
+	_place_dpad_button(dpad_down, center - half_button, far, button_size)
+	_place_dpad_button(dpad_down_right, far, far, button_size)
 
 func _place_dpad_button(button: Button, x: float, y: float, button_size: float) -> void:
 	if not button:
@@ -209,14 +222,22 @@ func _input(event: InputEvent) -> void:
 func _dpad_direction_at(screen_position: Vector2) -> String:
 	if not dpad_root or not dpad_root.visible:
 		return ""
+	if dpad_up_left and dpad_up_left.get_global_rect().has_point(screen_position):
+		return "up_left"
 	if dpad_up and dpad_up.get_global_rect().has_point(screen_position):
 		return "up"
-	if dpad_down and dpad_down.get_global_rect().has_point(screen_position):
-		return "down"
+	if dpad_up_right and dpad_up_right.get_global_rect().has_point(screen_position):
+		return "up_right"
 	if dpad_left and dpad_left.get_global_rect().has_point(screen_position):
 		return "left"
 	if dpad_right and dpad_right.get_global_rect().has_point(screen_position):
 		return "right"
+	if dpad_down_left and dpad_down_left.get_global_rect().has_point(screen_position):
+		return "down_left"
+	if dpad_down and dpad_down.get_global_rect().has_point(screen_position):
+		return "down"
+	if dpad_down_right and dpad_down_right.get_global_rect().has_point(screen_position):
+		return "down_right"
 	return ""
 
 func _refresh_dpad_state() -> void:
@@ -231,6 +252,11 @@ func _refresh_dpad_state() -> void:
 	if not mouse_dpad_direction.is_empty():
 		directions.append(mouse_dpad_direction)
 
+	var up_left_active: bool = false
+	var up_right_active: bool = false
+	var down_left_active: bool = false
+	var down_right_active: bool = false
+
 	for direction in directions:
 		match direction:
 			"up":
@@ -241,15 +267,39 @@ func _refresh_dpad_state() -> void:
 				dpad_left_held = true
 			"right":
 				dpad_right_held = true
+			"up_left":
+				dpad_up_held = true
+				dpad_left_held = true
+				up_left_active = true
+			"up_right":
+				dpad_up_held = true
+				dpad_right_held = true
+				up_right_active = true
+			"down_left":
+				dpad_down_held = true
+				dpad_left_held = true
+				down_left_active = true
+			"down_right":
+				dpad_down_held = true
+				dpad_right_held = true
+				down_right_active = true
 
+	if dpad_up_left:
+		dpad_up_left.set_pressed_no_signal(up_left_active)
 	if dpad_up:
-		dpad_up.set_pressed_no_signal(dpad_up_held)
-	if dpad_down:
-		dpad_down.set_pressed_no_signal(dpad_down_held)
+		dpad_up.set_pressed_no_signal(dpad_up_held and not up_left_active and not up_right_active)
+	if dpad_up_right:
+		dpad_up_right.set_pressed_no_signal(up_right_active)
 	if dpad_left:
-		dpad_left.set_pressed_no_signal(dpad_left_held)
+		dpad_left.set_pressed_no_signal(dpad_left_held and not up_left_active and not down_left_active)
 	if dpad_right:
-		dpad_right.set_pressed_no_signal(dpad_right_held)
+		dpad_right.set_pressed_no_signal(dpad_right_held and not up_right_active and not down_right_active)
+	if dpad_down_left:
+		dpad_down_left.set_pressed_no_signal(down_left_active)
+	if dpad_down:
+		dpad_down.set_pressed_no_signal(dpad_down_held and not down_left_active and not down_right_active)
+	if dpad_down_right:
+		dpad_down_right.set_pressed_no_signal(down_right_active)
 
 	_send_dpad_vector()
 
