@@ -17,7 +17,6 @@ extends Node3D
 @export var camera_return_speed: float = 3.6
 @export var camera_move_return_delay: float = 0.12
 @export var defense_alert_distance: float = 52.0
-@export var target_lock_distance: float = 90.0
 
 @export var enemy_ship_scene: PackedScene = preload("res://scenes/ships/enemy_ship.tscn")
 
@@ -26,7 +25,7 @@ var _camera_pitch: float = 0.52
 var _camera_drag_touch: int = -1
 var _mouse_orbiting: bool = false
 var _camera_idle_time: float = 0.0
-var _combat_target: Node3D = null
+var _ship_camera_locked: bool = true
 
 func _ready() -> void:
 	if hud and player_ship:
@@ -42,7 +41,6 @@ func _ready() -> void:
 	_snap_camera_to_player()
 
 func _physics_process(delta: float) -> void:
-	_validate_combat_target()
 	_update_camera(delta)
 	_update_ocean_anchor()
 
@@ -93,13 +91,13 @@ func _update_camera(delta: float) -> void:
 
 	var camera_is_held: bool = _camera_drag_touch != -1 or _mouse_orbiting
 
-	# "Magnetic" rear camera:
-	# while the player is touching the camera it is fully free.
-	# once released, it smoothly returns behind the ship.
-	# target lock intentionally disables this auto-return so combat framing stays where the player left it.
+	# Black-Flag-style ship camera behavior:
+	# LOCKED = camera belongs to the ship. You can look around while dragging,
+	# then it magnetically returns behind the stern and follows the ship's heading.
+	# FREE = camera still follows the ship's position, but keeps the orbit angle you chose.
 	if camera_is_held:
 		_camera_idle_time = 0.0
-	elif not (_combat_target and is_instance_valid(_combat_target)):
+	elif _ship_camera_locked:
 		_camera_idle_time += delta
 
 		var ship_is_moving: bool = false
@@ -154,56 +152,29 @@ func screen_aim_to_world(input_vector: Vector2) -> Vector3:
 	var result: Vector3 = cam_right * input_vector.x + cam_forward * -input_vector.y
 	return result.normalized() if result.length_squared() > 0.0001 else Vector3.ZERO
 
-func toggle_combat_target() -> void:
-	if _combat_target and is_instance_valid(_combat_target):
-		_set_combat_target(null)
-		return
+func toggle_ship_camera_lock() -> void:
+	_ship_camera_locked = not _ship_camera_locked
+	_camera_idle_time = camera_return_delay if _ship_camera_locked else 0.0
 
-	var nearest: Node3D = _find_nearest_enemy(target_lock_distance)
-	if nearest:
-		_set_combat_target(nearest)
-
-func get_combat_target() -> Node3D:
-	return _combat_target
+func is_ship_camera_locked() -> bool:
+	return _ship_camera_locked
 
 func get_war_mode() -> String:
-	if _combat_target and is_instance_valid(_combat_target):
-		return "ATTACK"
+	if player_ship and is_instance_valid(player_ship):
+		var port_cd: Variant = player_ship.get("port_cooldown")
+		var starboard_cd: Variant = player_ship.get("starboard_cooldown")
+		var manual_aim: Variant = player_ship.get("manual_aim_direction")
+		if manual_aim is Vector3 and (manual_aim as Vector3).length_squared() > 0.0001:
+			return "ATTACK"
+		if port_cd is float and float(port_cd) > 0.0:
+			return "ATTACK"
+		if starboard_cd is float and float(starboard_cd) > 0.0:
+			return "ATTACK"
 
 	if _find_nearest_enemy(defense_alert_distance):
 		return "DEFENSE"
 
 	return ""
-
-func _set_combat_target(target: Node3D) -> void:
-	if _combat_target and is_instance_valid(_combat_target) and _combat_target.has_method("set_targeted"):
-		_combat_target.call("set_targeted", false)
-
-	_combat_target = target
-
-	if _combat_target and is_instance_valid(_combat_target) and _combat_target.has_method("set_targeted"):
-		_combat_target.call("set_targeted", true)
-
-	if player_ship and is_instance_valid(player_ship) and player_ship.has_method("set_combat_target"):
-		player_ship.call("set_combat_target", _combat_target)
-
-func _validate_combat_target() -> void:
-	if not _combat_target:
-		return
-
-	if not is_instance_valid(_combat_target):
-		_combat_target = null
-		if player_ship and is_instance_valid(player_ship) and player_ship.has_method("set_combat_target"):
-			player_ship.call("set_combat_target", null)
-		return
-
-	var dead_value: Variant = _combat_target.get("is_dead")
-	if dead_value is bool and bool(dead_value):
-		_set_combat_target(null)
-		return
-
-	if player_ship and player_ship.global_position.distance_to(_combat_target.global_position) > target_lock_distance * 1.25:
-		_set_combat_target(null)
 
 func _find_nearest_enemy(max_distance: float) -> Node3D:
 	if not player_ship or not is_instance_valid(player_ship):
@@ -235,7 +206,6 @@ func _update_ocean_anchor() -> void:
 	ocean.global_position.z = player_ship.global_position.z
 
 func _on_enemy_destroyed(_enemy_name: String) -> void:
-	_validate_combat_target()
 	await get_tree().create_timer(5.0).timeout
 	if not enemy_ship_scene:
 		return
