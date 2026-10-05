@@ -86,7 +86,8 @@ func _ready() -> void:
 	_update_world_health_bar()
 
 func set_joystick_input(vec: Vector2) -> void:
-	joystick_input = vec.limit_length(1.0)
+	# Keep throttle and rudder independent so forward/back does not weaken while steering.
+	joystick_input = Vector2(clampf(vec.x, -1.0, 1.0), clampf(vec.y, -1.0, 1.0))
 
 func _physics_process(delta: float) -> void:
 	_handle_movement(delta)
