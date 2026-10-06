@@ -51,28 +51,28 @@ static func _initialize_levels() -> void:
 	if not _levels.is_empty():
 		return
 
-	# LEVEL 1
+	# LEVEL 1 — same Ragged Drifter hull, badly worn and without weapons/sailing rig.
 	_levels[1] = LevelInfo.new(
-		1, "Row Skiff", "Small primitive skiff. Single mast and simple canvas.",
-		100.0, 13.0, 1.45, 4.0, 30.0, 2.2, 20, 0,
-		["hull_base", "mast_main", "sail_main", "cannons_pair_1"],
-		["slot_cannon_port_1", "slot_cannon_starboard_1", "slot_sail_main"]
+		1, "Ragged Drifter I", "A battered starter hull. No cannon and no travel sail yet. Maximum speed: 10 kn.",
+		90.0, 10.0, 1.50, 3.5, 0.0, 99.0, 18, 0,
+		[],
+		[]
 	)
 
-	# LEVEL 2
+	# LEVEL 2 — repair the same hull, improve speed, add the first cannon pair.
 	_levels[2] = LevelInfo.new(
-		2, "Fisher Sloop", "Improved deck planks and a small provision crate.",
-		110.0, 13.3, 1.48, 4.1, 32.0, 2.15, 23, 75,
-		["hull_base", "mast_main", "sail_main", "cannons_pair_1", "deck_trim", "crate_small"],
-		["slot_cannon_port_1", "slot_cannon_starboard_1", "slot_sail_main", "slot_storage_crate"]
+		2, "Ragged Drifter II", "The same hull, partly repaired. Speed improves and the first cannon pair is installed.",
+		105.0, 11.5, 1.52, 3.9, 30.0, 2.4, 22, 75,
+		["cannons_pair_1"],
+		["slot_cannon_port_1", "slot_cannon_starboard_1"]
 	)
 
-	# LEVEL 3
+	# LEVEL 3 — add the main sail and unlock Travel Speed.
 	_levels[3] = LevelInfo.new(
-		3, "Coast Raider", "Extended bowsprit, carved stern balcony and a rum barrel for morale.",
-		122.0, 13.6, 1.52, 4.25, 34.0, 2.1, 26, 120,
-		["hull_base", "mast_main", "sail_main", "cannons_pair_1", "deck_trim", "crate_small", "barrel_small", "bowsprit_spar", "stern_extension"],
-		["slot_cannon_port_1", "slot_cannon_starboard_1", "slot_sail_main", "slot_storage_crate", "slot_cosmetic_bow"]
+		3, "Ragged Drifter III", "Main sail installed. Open/close the sail manually and keep a straight course to unlock Travel Speed.",
+		120.0, 12.5, 1.55, 4.2, 34.0, 2.2, 26, 120,
+		["cannons_pair_1"],
+		["slot_cannon_port_1", "slot_cannon_starboard_1", "slot_sail_main"]
 	)
 
 	# LEVEL 4
