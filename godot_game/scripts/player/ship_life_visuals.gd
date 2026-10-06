@@ -33,14 +33,14 @@ func setup(owner_ship: Node3D) -> void:
 	player = owner_ship
 	name = "ShipLifeVisuals"
 	_build_materials()
-	_build_crew()
+	# Crew characters are intentionally disabled. Keep only ship/anchor visuals.
 	_build_anchor_visuals()
 
 func set_level(new_level: int) -> void:
 	level = new_level
-	# Level 1 starts with the complete working crew. Higher levels will add more later.
+	# No visible crew on the player ship.
 	if crew_root:
-		crew_root.visible = true
+		crew_root.visible = false
 
 func update_visuals(delta: float) -> void:
 	if not player or not is_instance_valid(player):
