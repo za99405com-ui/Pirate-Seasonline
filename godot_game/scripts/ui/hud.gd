@@ -302,9 +302,9 @@ func _update_helm_status(rudder_value: float) -> void:
 func _cycle_sails() -> void:
 	if not player_ship or not is_instance_valid(player_ship) or not player_ship.has_method("get_sail_level"):
 		return
-	var current_level: int = int(player_ship.call("get_sail_level"))
-	var next_level: int = (current_level + 1) % 3
-	player_ship.call("set_sail_level", next_level)
+	# Two states only: stopped/closed or moving/open.
+	var current_state: int = int(player_ship.call("get_sail_level"))
+	player_ship.call("set_sail_level", 0 if current_state > 0 else 2)
 	_update_sailing_buttons()
 
 func _toggle_anchor() -> void:
@@ -318,14 +318,18 @@ func _update_sailing_buttons() -> void:
 		return
 
 	if sails_button and player_ship.has_method("get_sail_level"):
-		var sail_level: int = int(player_ship.call("get_sail_level"))
-		match sail_level:
-			1:
-				sails_button.text = "SAILS\nHALF"
-			2:
-				sails_button.text = "SAILS\nFULL"
-			_:
-				sails_button.text = "SAILS\nFURLED"
+		var propulsion_on: bool = int(player_ship.call("get_sail_level")) > 0
+		var sail_unlocked: bool = GameManager.current_ship_level >= 3
+		if player_ship.has_method("has_sail_upgrade"):
+			sail_unlocked = bool(player_ship.call("has_sail_upgrade"))
+
+		if sail_unlocked:
+			sails_button.icon = load("res://assets/ui/sail.svg") as Texture2D
+			sails_button.text = "SAIL\nOPEN" if propulsion_on else "SAIL\nCLOSED"
+		else:
+			# Before the sail is installed, this same control is the basic rowing stop/go control.
+			sails_button.icon = null
+			sails_button.text = "ROWING\nON" if propulsion_on else "ROWING\nSTOPPED"
 
 	if anchor_button and player_ship.has_method("is_anchor_deployed"):
 		var deployed: bool = bool(player_ship.call("is_anchor_deployed"))
@@ -393,16 +397,15 @@ func _process(delta: float) -> void:
 		if player_ship.has_method("is_travel_mode"):
 			travel_active = bool(player_ship.call("is_travel_mode"))
 
-		var sail_name: String = "FURLED"
-		if player_ship.has_method("get_sail_level"):
-			match int(player_ship.call("get_sail_level")):
-				1:
-					sail_name = "HALF SAIL"
-				2:
-					sail_name = "FULL SAIL"
+		var propulsion_on: bool = int(player_ship.call("get_sail_level")) > 0 if player_ship.has_method("get_sail_level") else false
+		var status_name: String
+		if GameManager.current_ship_level >= 3:
+			status_name = "SAIL OPEN" if propulsion_on else "SAIL CLOSED"
+		else:
+			status_name = "ROWING" if propulsion_on else "STOPPED"
 
 		var prefix: String = "TRAVEL ×1.5  •  " if travel_active else ""
-		speed_label.text = "%s%.1f kn\n%s" % [prefix, speed_value, sail_name]
+		speed_label.text = "%s%.1f kn\n%s" % [prefix, speed_value, status_name]
 
 	_update_sailing_buttons()
 	_update_combat_indicator()
@@ -456,6 +459,11 @@ func _on_ship_level_changed(new_level: int, title: String) -> void:
 	if ship_level_label:
 		ship_level_label.text = "Lv.%d • %s" % [new_level, title]
 	_update_upgrade_button()
+	_update_sailing_buttons()
+	if new_level == 2:
+		_show_notification("CANNON UNLOCKED")
+	elif new_level == 3:
+		_show_notification("MAIN SAIL + TRAVEL SPEED UNLOCKED")
 
 func _on_ship_storage_changed(_used: int, _capacity: int) -> void:
 	pass
