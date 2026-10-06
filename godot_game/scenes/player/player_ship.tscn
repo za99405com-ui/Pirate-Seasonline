@@ -414,7 +414,8 @@ shape = SubResource("HullShape")
 [node name="Visuals" type="Node3D" parent="."]
 
 [node name="ShipModel" parent="Visuals" instance=ExtResource("3_ship_model")]
-scale = Vector3(0.70, 0.70, 0.70)
+position = Vector3(0, 2.7, 0)
+scale = Vector3(6.4, 6.4, 6.4)
 
 [node name="BaseHull" type="Node3D" parent="Visuals"]
 visible = false
