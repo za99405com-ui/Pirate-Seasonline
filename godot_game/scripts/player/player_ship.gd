@@ -113,16 +113,26 @@ func get_rudder_input() -> float:
 	return rudder_input
 
 func set_sail_level(level: int) -> void:
-	sail_level = clampi(level, 0, 2)
+	# Two-state propulsion. Levels 1-2 use rowing (stop/go); Level 3+ uses the real sail.
+	sail_level = 2 if level > 0 else 0
 	if sail_level < 2 and travel_mode:
 		_set_travel_mode(false)
 		_reset_travel_progress()
+
+func toggle_sail() -> void:
+	set_sail_level(0 if sail_level > 0 else 2)
 
 func get_sail_level() -> int:
 	return sail_level
 
 func get_sail_power() -> float:
 	return sail_power
+
+func has_sail_upgrade() -> bool:
+	return current_level >= 3
+
+func has_travel_upgrade() -> bool:
+	return current_level >= 3
 
 func toggle_anchor() -> void:
 	if anchor_deployed:
@@ -167,16 +177,10 @@ func _physics_process(delta: float) -> void:
 	_keep_world_health_bar_readable()
 
 func _handle_movement(delta: float) -> void:
-	var target_sail_power: float = 0.0
-	match sail_level:
-		1:
-			target_sail_power = half_sail_power
-		2:
-			target_sail_power = 1.0
-		_:
-			target_sail_power = 0.0
+	# L1-L2: rowing propulsion. L3+: the same input opens/closes the installed sail.
+	var target_sail_power: float = 1.0 if sail_level > 0 else 0.0
 
-	# Sails gain/lose drive progressively; changing sail state never teleports speed.
+	# Propulsion builds and drops progressively; closing the sail never teleports speed.
 	sail_power = move_toward(sail_power, target_sail_power, sail_response * delta)
 	smoothed_throttle = sail_power
 	smoothed_rudder = move_toward(smoothed_rudder, rudder_input, rudder_response * delta)
@@ -252,7 +256,7 @@ func _update_travel_mode(_delta: float) -> void:
 	if forward.length_squared() > 0.0001:
 		forward = forward.normalized()
 
-	if combat_active or anchor_deployed or sail_level < 2:
+	if current_level < 3 or combat_active or anchor_deployed or sail_level < 2:
 		_reset_travel_progress()
 		if travel_mode:
 			_set_travel_mode(false)
@@ -369,15 +373,8 @@ func _update_travel_effects(delta: float) -> void:
 	var blend_rate: float = 1.0 / maxf(travel_transition_time, 0.05)
 	travel_blend = move_toward(travel_blend, target_blend, blend_rate * delta)
 
-	# Sail opening has its own slower visual state so the crew appears to work the canvas.
-	var sail_visual_target: float = 0.0
-	match sail_level:
-		1:
-			sail_visual_target = 0.55
-		2:
-			sail_visual_target = 1.0
-		_:
-			sail_visual_target = 0.0
+	# The real sail is unlocked at Level 3 and has a physical OPEN/CLOSED transition.
+	var sail_visual_target: float = 1.0 if current_level >= 3 and sail_level > 0 else 0.0
 	sail_visual_progress = move_toward(sail_visual_progress, sail_visual_target, sail_visual_response * delta)
 
 	# Open/close sails one after another instead of every sheet popping at once.
@@ -512,6 +509,10 @@ func apply_ship_level(lvl: int) -> void:
 	cannon_damage = info.cannon_damage
 	reload_time = info.reload_time
 
+	if current_level < 3 and travel_mode:
+		_set_travel_mode(false)
+		_reset_travel_progress()
+
 	# 2. Configure storage capacity
 	storage.configure_for_level(current_level, info.storage_capacity)
 	GameManager.update_storage(storage.used_storage, storage.storage_capacity)
@@ -545,20 +546,68 @@ func _apply_level_visual_stage() -> void:
 	if not visuals:
 		return
 
-	# Level 1 and Level 2 keep the original ship. Level 3+ uses the imported 3D ship.
-	var starter_stage: bool = current_level <= 2
+	# The old handmade ship is permanently removed.
+	# Every level uses the same imported Ragged Drifter hull.
 	var ship_model := visuals.get_node_or_null("ShipModel") as Node3D
 	var base_hull := visuals.get_node_or_null("BaseHull") as Node3D
 	var mast_main := visuals.get_node_or_null("MastMain") as Node3D
 
 	if ship_model:
-		ship_model.visible = not starter_stage
+		ship_model.visible = true
 	if base_hull:
-		base_hull.visible = starter_stage
+		base_hull.visible = false
 	if mast_main:
-		mast_main.visible = starter_stage
+		mast_main.visible = false
+
+	# Keep only upgrade add-ons that belong to the new progression.
 	if progressive_parts:
-		progressive_parts.visible = starter_stage
+		progressive_parts.visible = true
+		for child in progressive_parts.get_children():
+			child.visible = false
+		var first_cannons := progressive_parts.get_node_or_null("cannons_pair_1") as Node3D
+		if first_cannons:
+			first_cannons.visible = current_level >= 2
+
+	_apply_imported_level_look()
+
+func _apply_imported_level_look() -> void:
+	# Same mesh at every level; only its condition changes.
+	# L1 is dark, rough and neglected. L2 is partly repaired. L3 restores the authored texture.
+	var ship_model_node: Node = visuals.get_node_or_null("ShipModel") if visuals else null
+	if not ship_model_node:
+		return
+
+	var stack: Array[Node] = [ship_model_node]
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		for child in node.get_children():
+			stack.append(child)
+
+		if not node is MeshInstance3D:
+			continue
+
+		var mesh_instance := node as MeshInstance3D
+		if not mesh_instance.mesh:
+			continue
+
+		for surface_index in range(mesh_instance.mesh.get_surface_count()):
+			# Level 3+ goes back to the GLB's original baked material.
+			if current_level >= 3:
+				mesh_instance.set_surface_override_material(surface_index, null)
+				continue
+
+			var source := mesh_instance.mesh.surface_get_material(surface_index)
+			if not source is StandardMaterial3D:
+				continue
+
+			var worn := (source as StandardMaterial3D).duplicate() as StandardMaterial3D
+			if current_level == 1:
+				worn.albedo_color *= Color(0.58, 0.54, 0.48, 1.0)
+				worn.roughness = maxf(worn.roughness, 0.94)
+			else:
+				worn.albedo_color *= Color(0.80, 0.77, 0.70, 1.0)
+				worn.roughness = maxf(worn.roughness, 0.82)
+			mesh_instance.set_surface_override_material(surface_index, worn)
 
 func _play_upgrade_celebration() -> void:
 	if not visuals:
@@ -571,6 +620,8 @@ func _on_storage_changed(used: int, capacity: int) -> void:
 	GameManager.update_storage(used, capacity)
 
 func get_cannons_per_side() -> int:
+	if current_level < 2:
+		return 0
 	if current_level >= 15:
 		return 4
 	if current_level >= 12:
