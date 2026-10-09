@@ -1,0 +1,31 @@
+name: Validate Godot Modular Ship
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  godot-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Godot 4.3
+        run: |
+          wget -q https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip
+          unzip -q Godot_v4.3-stable_linux.x86_64.zip
+          sudo mv Godot_v4.3-stable_linux.x86_64 /usr/local/bin/godot
+          sudo chmod +x /usr/local/bin/godot
+      - name: Import and scan for parse errors
+        working-directory: godot_game
+        run: |
+          godot --headless --path . --editor --quit 2>&1 | tee /tmp/import.log
+          if grep -E "SCRIPT ERROR|Parse Error|Failed to load script" /tmp/import.log; then exit 1; fi
+      - name: Test anchor lowering, world pivot, and retrieval
+        working-directory: godot_game
+        run: |
+          godot --headless --path . --script res://tools/anchor_smoke_test.gd
