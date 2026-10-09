@@ -51,5 +51,19 @@ func _smoke_test() -> void:
 		quit(1)
 		return
 
-	print("PASS: Level1 ship spawned; anchor dropped, orbited, and raised.")
+	ship.queue_free()
+	await process_frame
+	var world_scene := load("res://scenes/world/world.tscn") as PackedScene
+	if not world_scene:
+		push_error("Main gameplay scene failed to load")
+		quit(1)
+		return
+	var world := world_scene.instantiate()
+	root.add_child(world)
+	await process_frame
+	if not world.get_node_or_null("PlayerShip") or not world.get_node_or_null("HUD"):
+		push_error("World did not load the player ship and HUD")
+		quit(1)
+		return
+	print("PASS: Level1 ship + world + HUD loaded; anchor dropped, orbited, and raised.")
 	quit(0)
