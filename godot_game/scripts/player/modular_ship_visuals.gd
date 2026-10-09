@@ -1,3 +1,4 @@
+class_name ModularShipVisuals
 extends Node3D
 ## Purely visual modular ship: a single static hull, moving sail/helm,
 ## two low broadside cannons, and Level 2/3 cosmetic upgrades.
