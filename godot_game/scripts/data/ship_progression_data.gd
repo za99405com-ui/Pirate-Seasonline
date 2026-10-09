@@ -51,28 +51,26 @@ static func _initialize_levels() -> void:
 	if not _levels.is_empty():
 		return
 
-	# LEVEL 1 — same Ragged Drifter hull, badly worn and without weapons/sailing rig.
+	# Level 1-3 use the SAME modular hull. A sail and TWO low guns exist from Level 1.
 	_levels[1] = LevelInfo.new(
-		1, "Ragged Drifter I", "A battered starter hull. No cannon and no travel sail yet. Maximum speed: 10 kn.",
-		90.0, 10.0, 1.50, 3.5, 0.0, 99.0, 18, 0,
-		[],
-		[]
+		1, "Starter Ship I", "Base wooden hull; main sail, steering wheel, starboard anchor and two low cannons.",
+		90.0, 10.0, 1.50, 3.5, 25.0, 2.5, 18, 0,
+		["hull_base", "mast_main", "sail_main", "cannons_pair_1"],
+		["slot_cannon_port_1", "slot_cannon_starboard_1", "slot_sail_main", "slot_utility_anchor"]
 	)
 
-	# LEVEL 2 — repair the same hull, improve speed, add the first cannon pair.
 	_levels[2] = LevelInfo.new(
-		2, "Ragged Drifter II", "The same hull, partly repaired. Speed improves and the first cannon pair is installed.",
-		105.0, 11.5, 1.52, 3.9, 30.0, 2.4, 22, 75,
-		["cannons_pair_1"],
-		["slot_cannon_port_1", "slot_cannon_starboard_1"]
+		2, "Starter Ship II", "Same hull; subtle reinforced sail slits and improved sailing speed.",
+		105.0, 11.5, 1.52, 3.9, 28.0, 2.4, 22, 75,
+		["hull_base", "mast_main", "sail_main", "cannons_pair_1", "sail_level2_details"],
+		["slot_cannon_port_1", "slot_cannon_starboard_1", "slot_sail_main", "slot_utility_anchor"]
 	)
 
-	# LEVEL 3 — add the main sail and unlock Travel Speed.
 	_levels[3] = LevelInfo.new(
-		3, "Ragged Drifter III", "Main sail installed. Open/close the sail manually and keep a straight course to unlock Travel Speed.",
-		120.0, 12.5, 1.55, 4.2, 34.0, 2.2, 26, 120,
-		["cannons_pair_1"],
-		["slot_cannon_port_1", "slot_cannon_starboard_1", "slot_sail_main"]
+		3, "Starter Ship III", "Same ship with repaired hull and Travel Speed x1.5.",
+		120.0, 12.5, 1.55, 4.2, 32.0, 2.2, 26, 120,
+		["hull_base", "mast_main", "sail_main", "cannons_pair_1", "sail_level2_details", "repaired_hull"],
+		["slot_cannon_port_1", "slot_cannon_starboard_1", "slot_sail_main", "slot_utility_anchor"]
 	)
 
 	# LEVEL 4
