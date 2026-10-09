@@ -398,11 +398,7 @@ func _process(delta: float) -> void:
 			travel_active = bool(player_ship.call("is_travel_mode"))
 
 		var propulsion_on: bool = int(player_ship.call("get_sail_level")) > 0 if player_ship.has_method("get_sail_level") else false
-		var status_name: String
-		if GameManager.current_ship_level >= 3:
-			status_name = "SAIL OPEN" if propulsion_on else "SAIL CLOSED"
-		else:
-			status_name = "ROWING" if propulsion_on else "STOPPED"
+		var status_name: String = "SAIL OPEN" if propulsion_on else "SAIL CLOSED"
 
 		var prefix: String = "TRAVEL ×1.5  •  " if travel_active else ""
 		speed_label.text = "%s%.1f kn\n%s" % [prefix, speed_value, status_name]
@@ -461,9 +457,9 @@ func _on_ship_level_changed(new_level: int, title: String) -> void:
 	_update_upgrade_button()
 	_update_sailing_buttons()
 	if new_level == 2:
-		_show_notification("CANNON UNLOCKED")
+		_show_notification("SAIL REINFORCED • FASTER SHIP")
 	elif new_level == 3:
-		_show_notification("MAIN SAIL + TRAVEL SPEED UNLOCKED")
+		_show_notification("HULL REPAIRED • TRAVEL SPEED x1.5")
 
 func _on_ship_storage_changed(_used: int, _capacity: int) -> void:
 	pass
