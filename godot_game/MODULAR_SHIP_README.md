@@ -24,9 +24,9 @@ This PR contains the *integration code and temporary procedural fallback visuals
 
 | Required GitHub path | User's optimized asset |
 | --- | --- |
-| `godot_game/assets/models/Boat_Hull.glb` | `Pirate_Boat_A_Level1_Mobile_2048.glb` |
-| `godot_game/assets/models/Anchor.glb` | `Anchor_Mobile_2048.glb` |
-| `godot_game/assets/models/Anchor_Holder.glb` | `Anchor_Holder_Mobile_2048.glb` |
+| `godot_game/assets/models/Pirate_Boat_A_Level1_Mobile_2048.glb` | `Pirate_Boat_A_Level1_Mobile_2048.glb` |
+| `godot_game/assets/models/Anchor_Mobile_2048.glb` | `Anchor_Mobile_2048.glb` |
+| `godot_game/assets/models/Anchor_Holder_Mobile_2048.glb` | `Anchor_Holder_Mobile_2048.glb` |
 
 The engine will load those `.glb` models automatically when present. If absent, a visible procedural placeholder is rendered instead, so CI can validate code independently. The GLB scale and orientation will need visual calibration in Godot after import.
 
