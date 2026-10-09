@@ -5,7 +5,7 @@ extends Node3D
 ## Put generated GLBs in assets/models/. Procedural placeholders remain
 ## visible until the actual modular assets are committed.
 
-@export var base_hull_path: String = "res://assets/models/Boat_Hull.glb"
+@export var base_hull_path: String = "res://assets/models/Pirate_Boat_A_Level1_Mobile_2048.glb"
 @export var level2_sail_path: String = "res://assets/models/Level2_Sail.glb"
 @export var level3_hull_path: String = "res://assets/models/Level3_Hull.glb"
 
