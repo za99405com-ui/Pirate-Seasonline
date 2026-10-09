@@ -40,8 +40,8 @@ var _last_position: Vector3 = Vector3.ZERO
 var _wave_time: float = 0.0
 
 @onready var visuals: Node3D = $Visuals
-@onready var modular_visuals: Node3D = $Visuals/ModularShipVisuals
-@onready var anchor_rig: Node3D = $AnchorRig
+@onready var modular_visuals: ModularShipVisuals = $Visuals/ModularShipVisuals
+@onready var anchor_rig: AnchorRig = $AnchorRig
 
 func _ready() -> void:
 	add_to_group("player")
