@@ -1,3 +1,4 @@
+class_name AnchorRig
 extends Node3D
 ## Modular starboard anchor. The world anchor and rope are NOT children of the
 ## ship's moving transform: top_level nodes preserve the seabed pivot.
