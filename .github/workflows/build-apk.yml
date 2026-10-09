@@ -1,8 +1,6 @@
-name: Build Debug APK
+name: Legacy Android APK (manual)
 
 on:
-  push:
-    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
