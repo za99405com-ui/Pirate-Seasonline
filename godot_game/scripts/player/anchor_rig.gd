@@ -6,8 +6,8 @@ extends Node3D
 
 enum State { RAISED, LOWERING, SET, RAISING }
 
-@export var anchor_model_path: String = "res://assets/models/Anchor.glb"
-@export var holder_model_path: String = "res://assets/models/Anchor_Holder.glb"
+@export var anchor_model_path: String = "res://assets/models/Anchor_Mobile_2048.glb"
+@export var holder_model_path: String = "res://assets/models/Anchor_Holder_Mobile_2048.glb"
 @export var mount_offset: Vector3 = Vector3(2.35, 1.08, -1.45)
 @export var sea_floor_y: float = -3.5
 @export var lowering_speed: float = 2.3
