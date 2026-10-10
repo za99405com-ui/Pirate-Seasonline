@@ -54,21 +54,21 @@ static func _initialize_levels() -> void:
 	# Level 1-3 use the SAME modular hull. A sail and TWO low guns exist from Level 1.
 	_levels[1] = LevelInfo.new(
 		1, "Starter Ship I", "Base wooden hull; main sail, steering wheel, starboard anchor and two low cannons.",
-		90.0, 3.6, 0.92, 1.20, 25.0, 2.5, 18, 0,
+		90.0, 10.0, 0.20, 2.8, 25.0, 2.5, 18, 0,
 		["hull_base", "mast_main", "sail_main", "cannons_pair_1"],
 		["slot_cannon_port_1", "slot_cannon_starboard_1", "slot_sail_main", "slot_utility_anchor"]
 	)
 
 	_levels[2] = LevelInfo.new(
 		2, "Starter Ship II", "Same hull; subtle reinforced sail slits and improved sailing speed.",
-		105.0, 4.15, 0.95, 1.32, 28.0, 2.4, 22, 75,
+		105.0, 11.5, 0.215, 3.0, 28.0, 2.4, 22, 75,
 		["hull_base", "mast_main", "sail_main", "cannons_pair_1", "sail_level2_details"],
 		["slot_cannon_port_1", "slot_cannon_starboard_1", "slot_sail_main", "slot_utility_anchor"]
 	)
 
 	_levels[3] = LevelInfo.new(
 		3, "Starter Ship III", "Same ship with repaired hull and Travel Speed x1.5.",
-		120.0, 4.7, 0.98, 1.45, 32.0, 2.2, 26, 120,
+		120.0, 12.5, 0.23, 3.2, 32.0, 2.2, 26, 120,
 		["hull_base", "mast_main", "sail_main", "cannons_pair_1", "sail_level2_details", "repaired_hull"],
 		["slot_cannon_port_1", "slot_cannon_starboard_1", "slot_sail_main", "slot_utility_anchor"]
 	)
