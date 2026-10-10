@@ -14,7 +14,7 @@ enum State { RAISED, LOWERING, SET, RAISING }
 @export var raising_speed: float = 4.2
 @export var throw_side_distance: float = 2.15
 @export var throw_forward_distance: float = 0.55
-@export var initial_rope_slack: float = 0.55
+@export var initial_tension: float = 0.48
 
 var state: State = State.RAISED
 var seabed_point: Vector3 = Vector3.ZERO
@@ -161,7 +161,7 @@ func update_anchor(delta: float) -> void:
 				_anchor_position = seabed_point + Vector3(0.0, 0.13, 0.0)
 				state = State.SET
 				var ring_offset: Vector3 = get_attachment_position() - seabed_point
-				rope_reach = Vector2(ring_offset.x, ring_offset.z).length() + initial_rope_slack
+				rope_reach = maxf(0.80, Vector2(ring_offset.x, ring_offset.z).length() - initial_tension)
 		State.SET:
 			_anchor_position = seabed_point + Vector3(0.0, 0.13, 0.0)
 		State.RAISING:
