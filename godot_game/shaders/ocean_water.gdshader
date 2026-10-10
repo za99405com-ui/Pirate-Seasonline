@@ -35,11 +35,13 @@ void fragment(){
   float flow2 = sin(sea_uv.x*(-0.21) + sea_uv.y*0.27 - sea_time*0.42);
   float shimmer = smoothstep(0.74,1.50,flow*0.67+flow2*0.33);
   float tint = clamp(0.50 + wave_crest*0.16 + flow*0.022, 0.1,0.9);
+  float crest_foam = smoothstep(0.73, 0.99, wave_crest) * (0.07 + 0.05 * flow2);
   float view_fresnel = pow(1.0-clamp(dot(normalize(NORMAL),normalize(VIEW)),0.0,1.0),3.0);
   vec3 col = mix(deep_color,light_color,tint);
   col *= mix(0.19,1.0,daylight);
   ALBEDO = col + vec3(0.023,0.037,0.042)*shimmer*daylight
-              + vec3(0.035,0.055,0.060)*view_fresnel*daylight;
+              + vec3(0.035,0.055,0.060)*view_fresnel*daylight
+              + vec3(0.28,0.38,0.42)*crest_foam*daylight;
   ROUGHNESS=0.34;
   SPECULAR=0.42;
   METALLIC=0.01;
