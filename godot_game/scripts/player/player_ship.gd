@@ -10,9 +10,10 @@ signal ship_level_upgraded(new_level: int, title: String)
 @export var max_speed: float = 10.0
 @export var acceleration: float = 3.8
 @export var deceleration: float = 1.4
-@export var turn_speed: float = 1.5
+@export var turn_speed: float = 0.20
+@export var helm_turn_acceleration: float = 0.10
 @export var sail_response: float = 1.2
-@export var rudder_response: float = 3.5
+@export var rudder_response: float = 0.80
 @export var travel_speed_multiplier: float = 1.5
 
 @export_group("Ship")
@@ -39,6 +40,7 @@ var _travel_progress: float = 0.0
 var _last_position: Vector3 = Vector3.ZERO
 var _wave_time: float = 0.0
 var _anchor_yaw_velocity: float = 0.0
+var _helm_turn_velocity: float = 0.0
 
 @onready var visuals: Node3D = $Visuals
 @onready var modular_visuals: ModularShipVisuals = $Visuals/ModularShipVisuals
@@ -61,6 +63,7 @@ func _physics_process(delta: float) -> void:
 	anchor_deployed = anchor_rig.is_deployed()
 	anchor_set = anchor_rig.is_set()
 	if anchor_deployed:
+		_helm_turn_velocity = move_toward(_helm_turn_velocity, 0.0, helm_turn_acceleration * delta)
 		# Continue coasting during the anchor throw; this is a heavy ship,
 		# not a motorboat with an instant stop button.
 		var drag: float = 0.95 if not anchor_set else 1.65
@@ -73,14 +76,19 @@ func _physics_process(delta: float) -> void:
 			_apply_anchor_tension(delta)
 	else:
 		_anchor_yaw_velocity = 0.0
+		# Steer using angular INERTIA, not instantaneous car-like turning.
+		# Restoring forward speed does not change this yaw-rate limit.
 		var desired_speed: float = sail_power * max_speed * lerpf(1.0, travel_speed_multiplier, travel_blend)
 		current_forward_speed = move_toward(
 			current_forward_speed, desired_speed,
 			(acceleration if desired_speed > current_forward_speed else deceleration) * delta
 		)
-		if current_forward_speed > 0.06:
-			rotation.y -= smoothed_rudder * turn_speed * clampf(
-				current_forward_speed / maxf(max_speed, 0.1), 0.12, 1.0) * delta
+		var speed_fraction: float = clampf(current_forward_speed / maxf(max_speed, 0.1), 0.0, 1.0)
+		var target_yaw_rate: float = -smoothed_rudder * minf(turn_speed, 0.31) * sqrt(speed_fraction)
+		_helm_turn_velocity = move_toward(
+			_helm_turn_velocity, target_yaw_rate, helm_turn_acceleration * delta
+		)
+		rotation.y += _helm_turn_velocity * delta
 		velocity = -global_transform.basis.z * current_forward_speed
 		velocity.y = 0.0
 		move_and_slide()
@@ -129,8 +137,8 @@ func _apply_anchor_tension(delta: float) -> void:
 	# Helm input still influences the swing, without pulling the anchor
 	# itself along with the hull.
 	if sail_power > 0.05:
-		_anchor_yaw_velocity -= smoothed_rudder * 0.44 * sail_power * delta
-	_anchor_yaw_velocity = clampf(_anchor_yaw_velocity, -1.65, 1.65)
+		_anchor_yaw_velocity -= smoothed_rudder * 0.12 * sail_power * delta
+	_anchor_yaw_velocity = clampf(_anchor_yaw_velocity, -0.32, 0.32)
 	rotation.y += _anchor_yaw_velocity * delta
 	_anchor_yaw_velocity *= exp(-1.12 * delta)
 
@@ -274,6 +282,8 @@ func _respawn() -> void:
 	global_position = Vector3.ZERO
 	rotation = Vector3.ZERO
 	current_forward_speed = 0.0
+	_helm_turn_velocity = 0.0
+	_anchor_yaw_velocity = 0.0
 	sail_power = 0.0
 	sail_level = 0
 	travel_mode = false
