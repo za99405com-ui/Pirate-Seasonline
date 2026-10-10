@@ -70,8 +70,9 @@ func _import_hull(parent: Node3D, path: String) -> bool:
 	if first_mesh:
 		var extents: Vector3 = first_mesh.get_aabb().size
 		if extents.x > extents.z:
-			asset.rotation.y = PI * 0.5
+			asset.rotation.y = -PI * 0.5
 		asset.scale = Vector3.ONE * (8.6 / maxf(maxf(extents.x, extents.z), 0.01))
+		asset.position.y = -1.45
 		# Set the editable pivot once, then keep it fixed across levels.
 	return true
 
@@ -126,6 +127,7 @@ func _build_helm() -> void:
 	var ring := MeshInstance3D.new()
 	ring.mesh = torus
 	ring.material_override = wood
+	ring.rotation.x = PI * 0.5
 	_helm.add_child(ring)
 	for i in range(8):
 		var spoke := _box(_helm, Vector3(0.065, 0.92, 0.075), Vector3.ZERO, wood)
