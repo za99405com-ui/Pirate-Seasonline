@@ -16,6 +16,8 @@ var _daylight: float = 0.86
 var _lighting_refresh: float = 0.0
 var _ocean_shader: ShaderMaterial = null
 var _sea_time: float = 0.0
+var _wake: MeshInstance3D = null
+var _wake_material: ShaderMaterial = null
 
 @export_group("Sailing Camera")
 @export var camera_distance: float = 27.0
@@ -65,6 +67,7 @@ func _ready() -> void:
 		_ocean_shader = ShaderMaterial.new()
 		_ocean_shader.shader = preload("res://shaders/ocean_water.gdshader")
 		ocean.material_override = _ocean_shader
+	_create_wake()
 	_update_daylight()
 	if hud and player_ship:
 		hud.set_player(player_ship)
@@ -86,12 +89,45 @@ func _process(delta: float) -> void:
 	_sea_time += delta
 	if _ocean_shader:
 		_ocean_shader.set_shader_parameter("sea_time", _sea_time)
+	_update_wake()
 	# 24 in-game hours take 24 real minutes at the default setting.
 	_minute_of_day = fposmod(_minute_of_day + (game_minutes_per_real_minute / 60.0) * delta, 1440.0)
 	_lighting_refresh += delta
 	if _lighting_refresh >= 1.0:
 		_lighting_refresh = 0.0
 		_update_daylight()
+
+func _create_wake() -> void:
+	_wake = MeshInstance3D.new()
+	_wake.name = "ShipWake"
+	var wake_surface := PlaneMesh.new()
+	wake_surface.size = Vector2(6.0, 15.0)
+	wake_surface.subdivide_width = 22
+	wake_surface.subdivide_depth = 44
+	_wake.mesh = wake_surface
+	_wake.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_wake_material = ShaderMaterial.new()
+	_wake_material.shader = preload("res://shaders/ship_wake.gdshader")
+	_wake.material_override = _wake_material
+	add_child(_wake)
+	_wake.visible = false
+
+func _update_wake() -> void:
+	if not is_instance_valid(_wake) or not is_instance_valid(player_ship):
+		return
+	var current: float = float(player_ship.get("current_forward_speed"))
+	var speed_cap: float = maxf(0.01, float(player_ship.get("max_speed")))
+	var intensity: float = clampf(current / speed_cap, 0.0, 1.0)
+	_wake.visible = intensity > 0.14
+	if not _wake.visible:
+		return
+	# The boat stern points +Z; the wake stays horizontal, independently of
+	# the boat's heave/pitch, and its vertices follow physical sea waves.
+	_wake.global_position = player_ship.to_global(Vector3(0.0, 0.0, 10.5))
+	_wake.global_position.y = -0.073
+	_wake.rotation = Vector3(0.0, player_ship.global_rotation.y, 0.0)
+	_wake_material.set_shader_parameter("sea_time", _sea_time)
+	_wake_material.set_shader_parameter("ship_speed_ratio", intensity)
 
 func get_wave_height(at: Vector3) -> float:
 	# Exact same four wave phases and coefficients as ocean_water.gdshader.
