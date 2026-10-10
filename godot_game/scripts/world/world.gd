@@ -15,6 +15,7 @@ var _minute_of_day: float = 540.0
 var _daylight: float = 0.86
 var _lighting_refresh: float = 0.0
 var _ocean_shader: ShaderMaterial = null
+var _sea_time: float = 0.0
 
 @export_group("Sailing Camera")
 @export var camera_distance: float = 27.0
@@ -82,12 +83,30 @@ func _ready() -> void:
 	_snap_camera()
 
 func _process(delta: float) -> void:
+	_sea_time += delta
+	if _ocean_shader:
+		_ocean_shader.set_shader_parameter("sea_time", _sea_time)
 	# 24 in-game hours take 24 real minutes at the default setting.
 	_minute_of_day = fposmod(_minute_of_day + (game_minutes_per_real_minute / 60.0) * delta, 1440.0)
 	_lighting_refresh += delta
 	if _lighting_refresh >= 1.0:
 		_lighting_refresh = 0.0
 		_update_daylight()
+
+func get_wave_height(at: Vector3) -> float:
+	# Exact same three wave phases and coefficients as ocean_water.gdshader.
+	# The hull samples this at bow/stern/port/starboard each physics frame.
+	var a: float = sin(at.x * 0.14 + at.z * 0.09 + _sea_time * 0.62)
+	var b: float = sin(-at.x * 0.10 + at.z * 0.19 - _sea_time * 0.47)
+	var s: float = sin(at.x * 0.24 - at.z * 0.06 + _sea_time * 0.88)
+	return -0.12 + (0.52 * a + 0.33 * b + 0.15 * s) * 0.30
+
+func get_wave_push(at: Vector3) -> Vector2:
+	# Tiny swell/current: important while stationary, but not an ocean jet.
+	return Vector2(
+		sin(_sea_time * 0.41 + at.z * 0.12),
+		cos(_sea_time * 0.32 - at.x * 0.09)
+	) * 0.055
 
 func get_clock_text() -> String:
 	var total: int = int(floor(_minute_of_day))
