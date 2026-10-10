@@ -112,7 +112,7 @@ func _apply_anchor_tension(delta: float) -> void:
 	if overstretch > 0.0:
 		# Pull the front-right ATTACHMENT point toward the dropped anchor.
 		# Correction is rate-limited so the bow swings, not teleports.
-		var correction: float = minf(overstretch, (0.85 + overstretch * 2.8) * delta)
+		var correction: float = minf(overstretch, (0.35 + overstretch * 1.15) * delta)
 		global_position += tether_vector * correction
 		current_forward_speed = move_toward(current_forward_speed, 0.0, 1.9 * delta)
 		var lever_arm: Vector3 = attachment - global_position
@@ -120,7 +120,7 @@ func _apply_anchor_tension(delta: float) -> void:
 		# Torque around the vessel center depends on the side of the bow
 		# that carries the rope. No fake "rotate in place" anchored mode.
 		var y_torque: float = lever_arm.cross(tether_vector).y
-		_anchor_yaw_velocity += clampf(y_torque * overstretch * 2.4, -3.1, 3.1) * delta
+		_anchor_yaw_velocity += clampf(y_torque * overstretch * 4.1, -3.5, 3.5) * delta
 	elif sail_power > 0.1:
 		# A little wind fills any spare rope; the vessel then naturally
 		# pulls sideways at the bow as the tether becomes taut.
@@ -130,7 +130,7 @@ func _apply_anchor_tension(delta: float) -> void:
 	# itself along with the hull.
 	if sail_power > 0.05:
 		_anchor_yaw_velocity -= smoothed_rudder * 0.44 * sail_power * delta
-	_anchor_yaw_velocity = clampf(_anchor_yaw_velocity, -1.5, 1.5)
+	_anchor_yaw_velocity = clampf(_anchor_yaw_velocity, -1.65, 1.65)
 	rotation.y += _anchor_yaw_velocity * delta
 	_anchor_yaw_velocity *= exp(-1.12 * delta)
 
