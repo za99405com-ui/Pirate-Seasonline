@@ -31,15 +31,15 @@ var _sea_time: float = 0.0
 @export var camera_return_delay: float = 0.75
 
 @export_group("Travel Camera")
-@export var travel_camera_distance: float = 36.5
+@export var travel_camera_distance: float = 26.0
 @export var travel_camera_pitch: float = 0.56
-@export var travel_camera_fov: float = 64.0
+@export var travel_camera_fov: float = 57.0
 
 @export_group("Combat Awareness")
 @export var combat_enter_distance: float = 68.0
 @export var combat_exit_distance: float = 82.0
 @export var combat_exit_grace: float = 2.5
-@export var combat_camera_distance: float = 31.0
+@export var combat_camera_distance: float = 23.0
 @export var combat_camera_pitch: float = 0.57
 @export var combat_camera_fov: float = 62.0
 @export var combat_heading_assist: float = 0.22
