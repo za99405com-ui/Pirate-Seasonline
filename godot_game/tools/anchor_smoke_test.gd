@@ -65,5 +65,32 @@ func _smoke_test() -> void:
 		push_error("World did not load the player ship and HUD")
 		quit(1)
 		return
-	print("PASS: Level1 ship + world + HUD loaded; anchor dropped, orbited, and raised.")
+	var world_hud := world.get_node("HUD") as CanvasLayer
+	var anchor_control := world_hud.get_node_or_null("Controls/SailingActions/AnchorControl") as Button
+	if not anchor_control or anchor_control.text != "" or not anchor_control.icon:
+		push_error("Anchor button must show icon only, without any text")
+		quit(1)
+		return
+	var anchor_style := anchor_control.get_theme_stylebox("normal") as StyleBoxFlat
+	if not anchor_style or anchor_style.bg_color.a > 0.01:
+		push_error("Anchor button background must be fully transparent")
+		quit(1)
+		return
+	var raised_icon: Texture2D = anchor_control.icon
+	(world.get_node("PlayerShip") as CharacterBody3D).toggle_anchor()
+	world_hud.call("_update_sailing_buttons")
+	if anchor_control.text != "" or anchor_control.icon == raised_icon:
+		push_error("Anchor icon must change when lowering, still with no text")
+		quit(1)
+		return
+	for asset_path in [
+		"res://assets/models/Pirate_Boat_A_Level1_Mobile_2048.glb",
+		"res://assets/models/Anchor_Mobile_2048.glb",
+		"res://assets/models/Anchor_Holder_Mobile_2048.glb"
+	]:
+		if not ResourceLoader.exists(asset_path):
+			push_error("Missing supplied GLB asset: " + asset_path)
+			quit(1)
+			return
+	print("PASS: Real assets, transparent icon-only anchor button, world, pivot motion, drop and raise.")
 	quit(0)
