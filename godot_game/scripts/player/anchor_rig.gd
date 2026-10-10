@@ -1,14 +1,17 @@
 class_name AnchorRig
 extends Node3D
-## Starboard anchor attached beside the forward-right gunwale.
-## The anchor is thrown outward (+X), never backward toward the stern.
-## Its world-space pin and curved rope give the bow a real mooring point.
+## The wooden bracket and the raised anchor are literally children of Visuals.
+## They bob/roll with the hull. ONLY when thrown does the anchor detach into
+## world space. When fully raised it reattaches to the ship-side holder.
 
 enum State { RAISED, LOWERING, SET, RAISING }
 
 @export var anchor_model_path: String = "res://assets/models/Anchor_Mobile_2048.glb"
 @export var holder_model_path: String = "res://assets/models/Anchor_Holder_Mobile_2048.glb"
-@export var mount_offset: Vector3 = Vector3(2.06, 1.38, -1.47)
+# Holder's wooden backplate intersects the starboard hull; never hovers outside.
+@export var mount_offset: Vector3 = Vector3(1.78, 1.05, -1.48)
+# Top metal anchor ring rests against the hooked bracket.
+@export var stow_socket: Vector3 = Vector3(0.46, 0.37, 0.0)
 @export var sea_floor_y: float = -3.5
 @export var lowering_speed: float = 5.8
 @export var raising_speed: float = 4.2
@@ -22,49 +25,51 @@ var rope_reach: float = 2.5
 var _anchor_position: Vector3 = Vector3.ZERO
 var _drop_progress: float = 0.0
 var _throw_start: Vector3 = Vector3.ZERO
+var _ship: Node3D
+var _visuals: Node3D
 var _holder: Node3D
 var _anchor: Node3D
 var _rope: MeshInstance3D
-var _ship: Node3D
 var _rope_refresh: int = 0
 var _splash_life: float = 0.0
 var _splash: MeshInstance3D
 
 func _ready() -> void:
 	_ship = get_parent() as Node3D
+	_visuals = _ship.get_node("Visuals") as Node3D
 	_holder = Node3D.new()
 	_holder.name = "StarboardAnchorHolder"
-	add_child(_holder)
-	if not _try_load_asset(_holder, holder_model_path, 0.9):
+	_visuals.add_child(_holder)
+	_holder.position = mount_offset
+	if not _try_load_asset(_holder, holder_model_path, 0.90):
 		_fallback_holder(_holder)
-	_holder.rotation.y = -0.18
 
 	_anchor = Node3D.new()
 	_anchor.name = "WorldAnchor"
-	add_child(_anchor)
-	_anchor.top_level = true
+	_holder.add_child(_anchor)
+	_anchor.position = stow_socket
 	if not _try_load_asset(_anchor, anchor_model_path, 1.22):
 		_fallback_anchor(_anchor)
 	else:
-		# Place the topmost part of the imported mesh right at the rope
-		# attachment pivot. The model stays alongside the hull when stowed.
+		# The exported GLB origin is not the rope eye. Find the imported
+		# transformed mesh AABB and move the *model* so the top ring touches
+		# the Anchor node pivot, even with the importer X-axis correction.
 		var model := _anchor.get_child(0) as Node3D
-		var imported_mesh: MeshInstance3D = _find_mesh(model)
-		if imported_mesh:
-			# GLBs include an X-axis import rotation. A raw mesh AABB is
-			# NOT the visible scene AABB: measure transformed corners.
-			var raw_box: AABB = imported_mesh.get_aabb()
-			var minimum: Vector3 = Vector3(INF, INF, INF)
-			var maximum: Vector3 = Vector3(-INF, -INF, -INF)
+		var mesh: MeshInstance3D = _find_mesh(model)
+		if mesh:
+			var bounds: AABB = mesh.get_aabb()
+			var lo: Vector3 = Vector3(INF, INF, INF)
+			var hi: Vector3 = Vector3(-INF, -INF, -INF)
 			for i in range(8):
-				var corner: Vector3 = _anchor.to_local(imported_mesh.to_global(raw_box.get_endpoint(i)))
-				minimum = minimum.min(corner)
-				maximum = maximum.max(corner)
+				var local_pt: Vector3 = _anchor.to_local(mesh.to_global(bounds.get_endpoint(i)))
+				lo = lo.min(local_pt)
+				hi = hi.max(local_pt)
 			model.position -= Vector3(
-				(minimum.x + maximum.x) * 0.5,
-				maximum.y,
-				(minimum.z + maximum.z) * 0.5
+				(lo.x + hi.x) * 0.5,
+				hi.y,
+				(lo.z + hi.z) * 0.5
 			)
+	_anchor_position = _anchor.global_position
 
 	_rope = MeshInstance3D.new()
 	_rope.name = "CurvedAnchorRope"
@@ -74,6 +79,7 @@ func _ready() -> void:
 	rope_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_rope.material_override = rope_material
 	_rope.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_rope.visible = false
 
 	_splash = MeshInstance3D.new()
 	_splash.name = "AnchorEntryRipple"
@@ -90,40 +96,54 @@ func _ready() -> void:
 	add_child(_splash)
 	_splash.top_level = true
 	_splash.visible = false
-	call_deferred("_reset_visuals")
-
-func get_attachment_position() -> Vector3:
-	return _attachment_position() + _ship.global_basis * Vector3(0.16, -0.04, 0.0)
-
-func _attachment_position() -> Vector3:
-	if not is_instance_valid(_ship):
-		return Vector3.ZERO
-	var ship_visuals: Node3D = _ship.get_node_or_null("Visuals") as Node3D
-	if ship_visuals:
-		return ship_visuals.to_global(mount_offset)
-	return _ship.to_global(mount_offset)
 
 func _stowed_ring() -> Vector3:
-	return _attachment_position() + _ship.global_basis * Vector3(0.18, -0.11, 0.0)
+	# The anchor pivot and the holder share the SAME parent when raised.
+	return _holder.to_global(stow_socket)
+
+func get_attachment_position() -> Vector3:
+	return _holder.to_global(stow_socket + Vector3(0.0, 0.05, 0.0))
+
+func _is_stowed_parent() -> bool:
+	return _anchor.get_parent() == _holder
+
+func _release_into_world() -> void:
+	if not _is_stowed_parent():
+		return
+	var in_world: Transform3D = _anchor.global_transform
+	_anchor.reparent(self, true)
+	_anchor.top_level = true
+	_anchor.global_transform = in_world
+	_anchor_position = in_world.origin
+
+func _attach_to_holder() -> void:
+	if not _is_stowed_parent():
+		_anchor.top_level = false
+		_anchor.reparent(_holder, false)
+	_anchor.top_level = false
+	_anchor.position = stow_socket
+	_anchor.rotation = Vector3.ZERO
+	_anchor.scale = Vector3.ONE
+	_anchor_position = _anchor.global_position
+	_rope.visible = false
 
 func _reset_visuals() -> void:
 	if not is_instance_valid(_ship) or not is_instance_valid(_anchor):
 		return
-	_anchor_position = _stowed_ring()
-	_anchor.global_position = _anchor_position
-	_update_holder_position()
-	_update_rope()
+	_attach_to_holder()
 
 func toggle() -> void:
 	if state == State.RAISED or state == State.RAISING:
-		_throw_start = _stowed_ring()
+		_release_into_world()
+		_throw_start = _anchor.global_position
 		_anchor_position = _throw_start
 		_drop_progress = 0.0
-		# Starboard (right) and slightly toward the BOW (-Z), not behind.
+		# Throw to STARBOARD (+X) and slightly FORWARD (-Z).
 		seabed_point = _throw_start + _ship.global_basis.x * throw_side_distance
 		seabed_point -= _ship.global_basis.z * throw_forward_distance
 		seabed_point.y = sea_floor_y
 		state = State.LOWERING
+		_rope.visible = true
 	else:
 		state = State.RAISING
 	_splash.visible = false
@@ -131,7 +151,7 @@ func toggle() -> void:
 
 func reset_anchor() -> void:
 	state = State.RAISED
-	call_deferred("_reset_visuals")
+	_attach_to_holder()
 
 func is_deployed() -> bool:
 	return state != State.RAISED
@@ -148,11 +168,13 @@ func get_rope_reach() -> float:
 func update_anchor(delta: float) -> void:
 	if not is_instance_valid(_anchor):
 		return
-	_update_holder_position()
+	if state == State.RAISED:
+		# No global-position assignments: Node3D parenting makes the anchor
+		# a stable part of the ship, including its wave-driven rotation.
+		_anchor_position = _anchor.global_position
+		return
 	var stowed: Vector3 = _stowed_ring()
 	match state:
-		State.RAISED:
-			_anchor_position = stowed
 		State.LOWERING:
 			_drop_progress = minf(_drop_progress + delta * 2.5, 1.0)
 			var throw_blend: float = smoothstep(0.0, 1.0, _drop_progress)
@@ -167,8 +189,8 @@ func update_anchor(delta: float) -> void:
 			if _drop_progress >= 1.0 and _anchor_position.y <= sea_floor_y + 0.14:
 				_anchor_position = seabed_point + Vector3(0.0, 0.13, 0.0)
 				state = State.SET
-				var ring_offset: Vector3 = get_attachment_position() - seabed_point
-				rope_reach = maxf(0.80, Vector2(ring_offset.x, ring_offset.z).length() - initial_tension)
+				var stretch: Vector3 = get_attachment_position() - seabed_point
+				rope_reach = maxf(0.80, Vector2(stretch.x, stretch.z).length() - initial_tension)
 		State.SET:
 			_anchor_position = seabed_point + Vector3(0.0, 0.13, 0.0)
 		State.RAISING:
@@ -176,9 +198,12 @@ func update_anchor(delta: float) -> void:
 			if _anchor_position.distance_to(stowed) <= 0.045:
 				_anchor_position = stowed
 				state = State.RAISED
-	_anchor.global_position = _anchor_position
+				_attach_to_holder()
+				return
+	if not _is_stowed_parent():
+		_anchor.global_position = _anchor_position
 	_rope_refresh += 1
-	if (_rope_refresh % 2) == 0 or state == State.RAISED:
+	if _rope_refresh % 2 == 0:
 		_update_rope()
 	if _splash_life > 0.0:
 		_splash_life -= delta
@@ -186,23 +211,17 @@ func update_anchor(delta: float) -> void:
 		if _splash_life <= 0.0:
 			_splash.visible = false
 
-func _update_holder_position() -> void:
-	if is_instance_valid(_holder):
-		_holder.global_position = _attachment_position()
-
 func _update_rope() -> void:
-	if not is_instance_valid(_rope):
+	if _is_stowed_parent():
+		_rope.visible = false
 		return
+	_rope.visible = true
 	var start: Vector3 = get_attachment_position()
 	var finish: Vector3 = _anchor_position
 	var straight: float = start.distance_to(finish)
-	var droop: float = clampf(straight * 0.14, 0.05, 0.9)
-	if state == State.RAISED:
-		droop = 0.035
+	var droop: float = clampf(straight * 0.14, 0.05, 0.90)
 	var sideways: Vector3 = _ship.global_basis.x * minf(straight * 0.14, 0.35)
 	var middle: Vector3 = (start + finish) * 0.5 + sideways - Vector3.UP * droop
-	# Curved rope generated in world coordinates; parent boat can rotate
-	# without dragging the seabed anchor along with it.
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var sides: int = 6
@@ -235,8 +254,8 @@ func _update_rope() -> void:
 	_rope.global_transform = Transform3D.IDENTITY
 
 func _bezier(a: Vector3, b: Vector3, c: Vector3, t: float) -> Vector3:
-	var one_minus: float = 1.0 - t
-	return a * one_minus * one_minus + b * 2.0 * t * one_minus + c * t * t
+	var u: float = 1.0 - t
+	return a * u * u + b * 2.0 * t * u + c * t * t
 
 func _try_load_asset(parent: Node3D, path: String, target_span: float) -> bool:
 	if not ResourceLoader.exists(path):
