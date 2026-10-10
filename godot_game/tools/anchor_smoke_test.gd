@@ -21,6 +21,16 @@ func _smoke_test() -> void:
 		return
 
 	ship.toggle_anchor()
+	var cast_to: Vector3 = rig.get_pivot() - rig.get_attachment_position()
+	cast_to.y = 0.0
+	if cast_to.dot(ship.global_basis.x) < 1.1:
+		push_error("Anchor cast must go over starboard, not behind the boat.")
+		quit(1)
+		return
+	if cast_to.dot(-ship.global_basis.z) <= 0.05:
+		push_error("Anchor cast must reach slightly FORWARD of the gunwale.")
+		quit(1)
+		return
 	for i in range(240):
 		rig.update_anchor(1.0 / 60.0)
 	if not rig.is_set():
@@ -126,6 +136,20 @@ func _smoke_test() -> void:
 	world._process(1.0)
 	if world.get_clock_text() != "09:01":
 		push_error("One real second must advance clock one game minute.")
+		quit(1)
+		return
+	var playing_ship: CharacterBody3D = world.get_node("PlayerShip") as CharacterBody3D
+	var wave_before: float = world.get_wave_height(Vector3.ZERO)
+	world._process(3.0)
+	var wave_after: float = world.get_wave_height(Vector3.ZERO)
+	if absf(wave_after - wave_before) < 0.015:
+		push_error("Water must physically rise and fall over time.")
+		quit(1)
+		return
+	playing_ship._physics_process(1.0 / 60.0)
+	var boat_visuals: Node3D = playing_ship.get_node("Visuals") as Node3D
+	if absf(boat_visuals.position.y) < 0.0001:
+		push_error("Vessel must move vertically in response to waves.")
 		quit(1)
 		return
 	var sea_material := (world.get_node("OceanPlane") as MeshInstance3D).material_override as ShaderMaterial
