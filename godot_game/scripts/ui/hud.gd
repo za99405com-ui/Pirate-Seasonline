@@ -1,5 +1,8 @@
 extends CanvasLayer
 
+const ANCHOR_RAISED_ICON: Texture2D = preload("res://assets/ui/anchor_raised.svg")
+const ANCHOR_LOWERED_ICON: Texture2D = preload("res://assets/ui/anchor_lowered.svg")
+
 @onready var top_bar: Panel = $TopBar
 @onready var gold_label: Label = $TopBar/GoldContainer/GoldLabel
 @onready var gold_title: Label = $TopBar/GoldContainer/GoldTitle
@@ -155,9 +158,7 @@ func _create_sailing_controls() -> void:
 	controls_root.add_child(right_sailing_root)
 
 	sails_button = _make_action_button("SAILS\nFURLED")
-	anchor_button = _make_action_button("ANCHOR\nREADY")
-	anchor_button.icon = load("res://assets/ui/anchor.svg") as Texture2D
-	anchor_button.expand_icon = true
+	anchor_button = _make_anchor_button()
 	sails_button.icon = load("res://assets/ui/sail.svg") as Texture2D
 	sails_button.expand_icon = true
 	right_sailing_root.add_child(sails_button)
@@ -195,6 +196,44 @@ func _make_action_button(text_value: String) -> Button:
 	button.add_theme_stylebox_override("pressed", pressed)
 	return button
 
+func _make_anchor_button() -> Button:
+	# A dedicated, transparent, circular anchor control. No labels or extra colors.
+	var button := Button.new()
+	button.name = "AnchorControl"
+	button.text = ""
+	button.tooltip_text = ""
+	button.focus_mode = Control.FOCUS_NONE
+	button.mouse_filter = Control.MOUSE_FILTER_STOP
+	button.icon = ANCHOR_RAISED_ICON
+	button.expand_icon = true
+	button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	button.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
+	button.custom_minimum_size = Vector2(82.0, 82.0)
+	button.add_theme_constant_override("icon_max_width", 54)
+
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.0, 0.0, 0.0, 0.0)
+	style.border_width_left = 3
+	style.border_width_right = 3
+	style.border_width_top = 3
+	style.border_width_bottom = 3
+	style.border_color = Color(0.05, 0.05, 0.05, 0.94)
+	style.corner_radius_top_left = 100
+	style.corner_radius_top_right = 100
+	style.corner_radius_bottom_left = 100
+	style.corner_radius_bottom_right = 100
+	style.anti_aliasing = true
+	style.anti_aliasing_size = 1.7
+
+	var pressed := style.duplicate() as StyleBoxFlat
+	pressed.bg_color = Color(0.0, 0.0, 0.0, 0.12)
+	button.add_theme_stylebox_override("normal", style)
+	button.add_theme_stylebox_override("hover", style)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_stylebox_override("disabled", style)
+	button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	return button
+
 func _layout_sailing_controls() -> void:
 	if not helm_root or not right_sailing_root:
 		return
@@ -229,8 +268,10 @@ func _layout_sailing_controls() -> void:
 
 	sails_button.position = Vector2(0.0, 0.0)
 	sails_button.size = Vector2(action_width, sail_height)
-	anchor_button.position = Vector2(0.0, sail_height + gap)
-	anchor_button.size = Vector2(action_width, anchor_height)
+	# Keep sail button untouched; the anchor control is a true circle.
+	var diameter: float = clampf(viewport_size.y * 0.12, 82.0, 105.0)
+	anchor_button.position = Vector2(action_width - diameter, sail_height + gap - (diameter - anchor_height) * 0.5)
+	anchor_button.size = Vector2(diameter, diameter)
 
 func _input(event: InputEvent) -> void:
 	if not helm_root:
@@ -333,15 +374,9 @@ func _update_sailing_buttons() -> void:
 
 	if anchor_button and player_ship.has_method("is_anchor_deployed"):
 		var deployed: bool = bool(player_ship.call("is_anchor_deployed"))
-		var set_now: bool = false
-		if player_ship.has_method("is_anchor_set"):
-			set_now = bool(player_ship.call("is_anchor_set"))
-		if not deployed:
-			anchor_button.text = "ANCHOR\nREADY"
-		elif set_now:
-			anchor_button.text = "ANCHOR\nSET"
-		else:
-			anchor_button.text = "ANCHOR\nDROPPING..."
+		anchor_button.text = ""
+		anchor_button.icon = ANCHOR_LOWERED_ICON if deployed else ANCHOR_RAISED_ICON
+		anchor_button.tooltip_text = ""
 
 func _create_combat_indicator() -> void:
 	combat_panel = PanelContainer.new()
