@@ -25,6 +25,7 @@ var player_ship: Node3D = null
 var world_controller: Node = null
 var combat_panel: PanelContainer = null
 var combat_label: Label = null
+var world_clock: Label = null
 
 var helm_root: Control = null
 var helm_background: Panel = null
@@ -52,6 +53,7 @@ func _ready() -> void:
 	_apply_clean_layout()
 	_create_sailing_controls()
 	_create_combat_indicator()
+	_create_world_clock()
 	if not get_viewport().size_changed.is_connected(_layout_sailing_controls):
 		get_viewport().size_changed.connect(_layout_sailing_controls)
 
@@ -378,6 +380,26 @@ func _update_sailing_buttons() -> void:
 		anchor_button.icon = ANCHOR_LOWERED_ICON if deployed else ANCHOR_RAISED_ICON
 		anchor_button.tooltip_text = ""
 
+func _create_world_clock() -> void:
+	world_clock = Label.new()
+	world_clock.name = "GameClock"
+	world_clock.anchor_left = 1.0
+	world_clock.anchor_right = 1.0
+	world_clock.offset_left = -158.0
+	world_clock.offset_right = -21.0
+	world_clock.offset_top = 16.0
+	world_clock.offset_bottom = 56.0
+	world_clock.text = "09:00"
+	world_clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	world_clock.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	world_clock.add_theme_font_size_override("font_size", 25)
+	world_clock.add_theme_color_override("font_color", Color(0.09, 0.16, 0.22, 0.93))
+	world_clock.add_theme_color_override("font_shadow_color", Color(0.88, 0.96, 1.0, 0.65))
+	world_clock.add_theme_constant_override("shadow_offset_x", 1)
+	world_clock.add_theme_constant_override("shadow_offset_y", 1)
+	world_clock.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(world_clock)
+
 func _create_combat_indicator() -> void:
 	combat_panel = PanelContainer.new()
 	combat_panel.name = "CombatState"
@@ -441,6 +463,8 @@ func _process(delta: float) -> void:
 	_update_sailing_buttons()
 	_update_combat_indicator()
 	_update_upgrade_button()
+	if world_clock and world_controller and world_controller.has_method("get_clock_text"):
+		world_clock.text = str(world_controller.call("get_clock_text"))
 
 func _update_combat_indicator() -> void:
 	if not combat_panel or not combat_label or not world_controller:
