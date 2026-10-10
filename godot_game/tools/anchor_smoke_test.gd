@@ -51,6 +51,21 @@ func _smoke_test() -> void:
 		quit(1)
 		return
 
+	ship.set_sail_level(2)
+	for i in range(90):
+		ship._physics_process(1.0 / 60.0)
+	var moving_before_drop: Vector3 = ship.global_position
+	ship.toggle_anchor()
+	for i in range(20):
+		ship._physics_process(1.0 / 60.0)
+	if ship.global_position.distance_to(moving_before_drop) < 0.05:
+		push_error("Anchor dropped but ship movement froze immediately.")
+		quit(1)
+		return
+	ship.toggle_anchor()
+	for i in range(200):
+		ship.anchor_rig.update_anchor(1.0 / 60.0)
+
 	ship.queue_free()
 	await process_frame
 	var world_scene := load("res://scenes/world/world.tscn") as PackedScene
@@ -104,5 +119,19 @@ func _smoke_test() -> void:
 		push_error("Original anchor / holder GLB not instanced; fallback was used.")
 		quit(1)
 		return
-	print("PASS: Real assets, transparent icon-only anchor button, world, pivot motion, drop and raise.")
+	if world.get_clock_text() != "09:00":
+		push_error("Game must start at 09:00")
+		quit(1)
+		return
+	world._process(1.0)
+	if world.get_clock_text() != "09:01":
+		push_error("One real second must advance clock one game minute.")
+		quit(1)
+		return
+	var sea_material := (world.get_node("OceanPlane") as MeshInstance3D).material_override as ShaderMaterial
+	if not sea_material or not sea_material.shader:
+		push_error("Animated ocean material not active.")
+		quit(1)
+		return
+	print("PASS: Real GLBs, anchor drift/orbit, icon UI, water waves and 24-minute game day.")
 	quit(0)
