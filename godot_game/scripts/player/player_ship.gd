@@ -60,19 +60,34 @@ func _physics_process(delta: float) -> void:
 	anchor_deployed = anchor_rig.is_deployed()
 	anchor_set = anchor_rig.is_set()
 	if anchor_deployed:
-		# No teleporting or moving the vessel through an anchored rope.
-		current_forward_speed = move_toward(current_forward_speed, 0.0, deceleration * delta * 1.6)
-		velocity = Vector3.ZERO
-		if anchor_set and sail_power > 0.05 and absf(smoothed_rudder) > 0.015:
-			# Rotate the ship's WORLD position around the fixed seabed anchor.
-			# The anchor never follows the moving ship.
+		# The boat CONTINUES MOVING just after dropping the anchor. Its speed
+		# bleeds off gradually as the rope pays out, rather than freezing.
+		var drag: float = deceleration * (2.15 if anchor_set else 1.65)
+		current_forward_speed = move_toward(current_forward_speed, 0.0, drag * delta)
+		velocity = -global_transform.basis.z * current_forward_speed
+		velocity.y = 0.0
+		if current_forward_speed > 0.02:
+			move_and_slide()
+
+		if anchor_set:
 			var pivot: Vector3 = anchor_rig.get_pivot()
 			anchor_point = pivot
 			pivot.y = global_position.y
-			var turn_amount: float = -smoothed_rudder * turn_speed * 0.65 * sail_power * delta
 			var relative: Vector3 = global_position - pivot
-			global_position = pivot + relative.rotated(Vector3.UP, turn_amount)
-			rotation.y += turn_amount
+			var reach: float = anchor_rig.get_rope_reach()
+			var horiz: float = Vector2(relative.x, relative.z).length()
+			if horiz > reach and horiz > 0.001:
+				# Hard stop only at full rope extension; the visual line still
+				# runs from the vessel to the anchored point.
+				global_position = pivot + relative * (reach / horiz)
+				current_forward_speed = minf(current_forward_speed, 0.15)
+			if sail_power > 0.05 and absf(smoothed_rudder) > 0.015:
+				# World-space orbit around the anchored point, NOT on-the-spot
+				# spin. This still works after the ship has coasted to a stop.
+				var turn_amount: float = -smoothed_rudder * turn_speed * 0.62 * sail_power * delta
+				var around: Vector3 = global_position - pivot
+				global_position = pivot + around.rotated(Vector3.UP, turn_amount)
+				rotation.y += turn_amount
 	else:
 		var desired_speed: float = sail_power * max_speed * lerpf(1.0, travel_speed_multiplier, travel_blend)
 		current_forward_speed = move_toward(
