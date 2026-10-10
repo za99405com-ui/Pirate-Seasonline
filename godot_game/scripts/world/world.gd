@@ -94,12 +94,13 @@ func _process(delta: float) -> void:
 		_update_daylight()
 
 func get_wave_height(at: Vector3) -> float:
-	# Exact same three wave phases and coefficients as ocean_water.gdshader.
+	# Exact same four wave phases and coefficients as ocean_water.gdshader.
 	# The hull samples this at bow/stern/port/starboard each physics frame.
 	var a: float = sin(at.x * 0.14 + at.z * 0.09 + _sea_time * 0.62)
 	var b: float = sin(-at.x * 0.10 + at.z * 0.19 - _sea_time * 0.47)
 	var s: float = sin(at.x * 0.24 - at.z * 0.06 + _sea_time * 0.88)
-	return -0.12 + (0.52 * a + 0.33 * b + 0.15 * s) * 0.30
+	var d: float = sin(-at.x * 0.36 - at.z * 0.13 + _sea_time * 1.37)
+	return -0.12 + (0.52 * a + 0.33 * b + 0.15 * s) * 0.30 + d * 0.07
 
 func get_wave_push(at: Vector3) -> Vector2:
 	# Tiny swell/current: important while stationary, but not an ocean jet.
