@@ -53,7 +53,7 @@ func _build_hull() -> void:
 	for side in [-1.0, 1.0]:
 		for z in [-2.8, -0.5, 1.9]:
 			_box(_repair_details, Vector3(0.10, 0.70, 0.28),
-				Vector3(side * 2.08, 0.35, z), iron)
+				Vector3(side * 2.08, 1.10, z), iron)
 	_repair_details.visible = false
 
 func _import_hull(parent: Node3D, path: String) -> bool:
@@ -72,7 +72,7 @@ func _import_hull(parent: Node3D, path: String) -> bool:
 		if extents.x > extents.z:
 			asset.rotation.y = -PI * 0.5
 		asset.scale = Vector3.ONE * (8.6 / maxf(maxf(extents.x, extents.z), 0.01))
-		asset.position.y = -1.45
+		asset.position.y = -0.65
 		# Set the editable pivot once, then keep it fixed across levels.
 	return true
 
@@ -96,6 +96,7 @@ func _make_fallback_hull(parent: Node3D) -> void:
 func _build_sail() -> void:
 	_sail = Node3D.new()
 	_sail.name = "SailRig"
+	_sail.position.y = 0.75
 	add_child(_sail)
 	var mast_mat := _mat(Color(0.37, 0.23, 0.12), false)
 	var fabric_mat := _mat(Color(0.83, 0.79, 0.67), false)
@@ -117,7 +118,7 @@ func _build_sail() -> void:
 func _build_helm() -> void:
 	_helm = Node3D.new()
 	_helm.name = "SteeringWheel"
-	_helm.position = Vector3(0.0, 2.14, 3.05)
+	_helm.position = Vector3(0.0, 2.89, 3.05)
 	add_child(_helm)
 	var wood := _mat(Color(0.40, 0.24, 0.12), false)
 	_cylinder(_helm, 0.10, 0.52, Vector3(0, -0.22, 0), wood)
@@ -139,7 +140,7 @@ func _build_cannons() -> void:
 	for side in [-1.0, 1.0]:
 		var cannon := Node3D.new()
 		cannon.name = "StarboardCannon" if side > 0.0 else "PortCannon"
-		cannon.position = Vector3(side * 1.80, 0.22, 0.35)
+		cannon.position = Vector3(side * 1.80, 0.97, 0.35)
 		add_child(cannon)
 		_box(cannon, Vector3(0.64, 0.35, 0.72), Vector3(-side * 0.05, -0.19, 0), wood)
 		var barrel := _cylinder(cannon, 0.18, 0.94,
