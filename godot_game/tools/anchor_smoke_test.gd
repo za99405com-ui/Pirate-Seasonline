@@ -38,6 +38,14 @@ func _smoke_test() -> void:
 		quit(1)
 		return
 
+	var initial_heading: float = ship.rotation.y
+	for i in range(45):
+		ship._physics_process(1.0 / 60.0)
+	if absf(angle_difference(initial_heading, ship.rotation.y)) < 0.03:
+		push_error("Starboard anchor must tug and swing the bow automatically.")
+		quit(1)
+		return
+
 	var pivot: Vector3 = rig.get_pivot()
 	ship.set_sail_level(2)
 	ship.set_rudder_input(0.9)
