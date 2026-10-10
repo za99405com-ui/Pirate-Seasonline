@@ -19,8 +19,28 @@ func _smoke_test() -> void:
 		push_error("Anchor must begin raised")
 		quit(1)
 		return
+	# The raised anchor must be an actual child of the fixed ship-side
+	# bracket, not an unrelated world-space mesh hovering nearby.
+	var raised_holder := ship.get_node_or_null("Visuals/StarboardAnchorHolder") as Node3D
+	if not raised_holder or not raised_holder.has_node("WorldAnchor"):
+		push_error("Raised anchor must be parented under ship visuals / holder")
+		quit(1)
+		return
+	var raised_anchor := raised_holder.get_node("WorldAnchor") as Node3D
+	var initial_offset: Vector3 = raised_anchor.global_position - ship.global_position
+	ship.global_position.x += 2.0
+	var moved_offset: Vector3 = raised_anchor.global_position - ship.global_position
+	if not initial_offset.is_equal_approx(moved_offset):
+		push_error("Raised anchor did not follow the hull's transform")
+		quit(1)
+		return
+	ship.global_position.x -= 2.0
 
 	ship.toggle_anchor()
+	if rig.get_node_or_null("WorldAnchor") == null:
+		push_error("Deployed anchor did not detach to world-space rig")
+		quit(1)
+		return
 	var cast_to: Vector3 = rig.get_pivot() - rig.get_attachment_position()
 	cast_to.y = 0.0
 	if cast_to.dot(ship.global_basis.x) < 1.1:
@@ -131,7 +151,7 @@ func _smoke_test() -> void:
 		quit(1)
 		return
 	var live_rig := world.get_node("PlayerShip/AnchorRig") as AnchorRig
-	var holder_node := live_rig.get_node("StarboardAnchorHolder")
+	var holder_node := world.get_node("PlayerShip/Visuals/StarboardAnchorHolder")
 	var anchor_node := live_rig.get_node("WorldAnchor")
 	if holder_node.get_child_count() != 1 or anchor_node.get_child_count() != 1:
 		push_error("Original anchor / holder GLB not instanced; fallback was used.")
