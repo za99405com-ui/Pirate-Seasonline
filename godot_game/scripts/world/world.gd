@@ -4,6 +4,17 @@ extends Node3D
 @onready var camera: Camera3D = $IsometricCamera
 @onready var hud: CanvasLayer = $HUD
 @onready var ocean: MeshInstance3D = $OceanPlane
+@onready var sun_light: DirectionalLight3D = $SunLight
+@onready var world_environment: WorldEnvironment = $WorldEnvironment
+
+@export_group("World Time")
+@export var start_hour: float = 9.0
+@export var game_minutes_per_real_minute: float = 10.0
+
+var _minute_of_day: float = 540.0
+var _daylight: float = 0.86
+var _lighting_refresh: float = 0.0
+var _ocean_shader: ShaderMaterial = null
 
 @export_group("Sailing Camera")
 @export var camera_distance: float = 27.0
@@ -48,6 +59,12 @@ var _combat_enemy: Node3D = null
 var _combat_clear_timer: float = 0.0
 
 func _ready() -> void:
+	_minute_of_day = fposmod(start_hour * 60.0, 1440.0)
+	if ocean:
+		_ocean_shader = ShaderMaterial.new()
+		_ocean_shader.shader = preload("res://shaders/ocean_water.gdshader")
+		ocean.material_override = _ocean_shader
+	_update_daylight()
 	if hud and player_ship:
 		hud.set_player(player_ship)
 
@@ -63,6 +80,42 @@ func _ready() -> void:
 		camera.fov = camera_fov
 
 	_snap_camera()
+
+func _process(delta: float) -> void:
+	# 24 in-game hours take 24 real minutes at the default setting.
+	_minute_of_day = fposmod(_minute_of_day + (game_minutes_per_real_minute / 60.0) * delta, 1440.0)
+	_lighting_refresh += delta
+	if _lighting_refresh >= 0.35:
+		_lighting_refresh = 0.0
+		_update_daylight()
+
+func get_clock_text() -> String:
+	var total: int = int(floor(_minute_of_day))
+	return "%02d:%02d" % [total / 60, total % 60]
+
+func get_game_hour() -> float:
+	return _minute_of_day / 60.0
+
+func _update_daylight() -> void:
+	var hour: float = _minute_of_day / 60.0
+	var solar_elevation: float = sin((hour - 6.0) * PI / 12.0)
+	_daylight = smoothstep(-0.09, 0.55, solar_elevation)
+	var sun_factor: float = maxf(0.0, solar_elevation)
+	if sun_light:
+		sun_light.rotation = Vector3(-maxf(0.10, sun_factor * 1.24), -0.88 + (hour - 12.0) * 0.04, 0)
+		sun_light.light_energy = lerpf(0.015, 1.22, _daylight) * (0.75 + 0.25 * sun_factor)
+		sun_light.light_color = Color(1.0, 0.75, 0.55).lerp(Color(1.0, 0.95, 0.84), clampf(sun_factor * 1.3, 0.0, 1.0))
+	if world_environment and world_environment.environment:
+		var env: Environment = world_environment.environment
+		env.ambient_light_energy = lerpf(0.26, 0.85, _daylight)
+		env.fog_light_color = Color(0.09, 0.17, 0.27).lerp(Color(0.62, 0.78, 0.87), _daylight)
+		if env.sky and env.sky.sky_material is ProceduralSkyMaterial:
+			var sky_mat := env.sky.sky_material as ProceduralSkyMaterial
+			sky_mat.sky_top_color = Color(0.025, 0.044, 0.11).lerp(Color(0.13, 0.36, 0.62), _daylight)
+			sky_mat.sky_horizon_color = Color(0.09, 0.13, 0.22).lerp(Color(0.72, 0.82, 0.90), _daylight)
+			sky_mat.ground_horizon_color = Color(0.07, 0.13, 0.20).lerp(Color(0.53, 0.71, 0.82), _daylight)
+	if _ocean_shader:
+		_ocean_shader.set_shader_parameter("daylight", lerpf(0.18, 1.0, _daylight))
 
 func _physics_process(delta: float) -> void:
 	_update_combat_state(delta)
