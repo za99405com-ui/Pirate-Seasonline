@@ -88,6 +88,27 @@ func _smoke_test() -> void:
 		push_error("The anchor failed to rise")
 		quit(1)
 		return
+	if not raised_holder.has_node("WorldAnchor"):
+		push_error("The raised anchor did not reattach to the ship bracket")
+		quit(1)
+		return
+
+	ship.set_rudder_input(1.0)
+	ship.set_sail_level(2)
+	for i in range(180):
+		ship._physics_process(1.0 / 60.0)
+	if ship.current_forward_speed < 7.0:
+		push_error("Sailing speed must not be reduced when reducing helm rotation")
+		quit(1)
+		return
+	var before_turn: float = ship.rotation.y
+	for i in range(60):
+		ship._physics_process(1.0 / 60.0)
+	var turn_in_one_sec: float = absf(angle_difference(before_turn, ship.rotation.y))
+	if turn_in_one_sec > 0.27 or turn_in_one_sec < 0.02:
+		push_error("Rudder must steer a heavy ship, not a fast car")
+		quit(1)
+		return
 
 	ship.set_sail_level(2)
 	for i in range(90):
@@ -178,6 +199,11 @@ func _smoke_test() -> void:
 	var boat_visuals: Node3D = playing_ship.get_node("Visuals") as Node3D
 	if absf(boat_visuals.position.y) < 0.0001:
 		push_error("Vessel must move vertically in response to waves.")
+		quit(1)
+		return
+	var wake := world.get_node_or_null("ShipWake") as MeshInstance3D
+	if not wake or not wake.material_override is ShaderMaterial:
+		push_error("Moving ship must generate a floating wake mesh")
 		quit(1)
 		return
 	var sea_material := (world.get_node("OceanPlane") as MeshInstance3D).material_override as ShaderMaterial
