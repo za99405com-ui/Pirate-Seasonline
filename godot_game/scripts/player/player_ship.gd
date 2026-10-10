@@ -9,7 +9,7 @@ signal ship_level_upgraded(new_level: int, title: String)
 @export_group("Navigation")
 @export var max_speed: float = 10.0
 @export var acceleration: float = 3.8
-@export var deceleration: float = 2.6
+@export var deceleration: float = 1.4
 @export var turn_speed: float = 1.5
 @export var sail_response: float = 1.2
 @export var rudder_response: float = 3.5
@@ -38,6 +38,7 @@ var storage: ShipStorage = ShipStorage.new()
 var _travel_progress: float = 0.0
 var _last_position: Vector3 = Vector3.ZERO
 var _wave_time: float = 0.0
+var _anchor_yaw_velocity: float = 0.0
 
 @onready var visuals: Node3D = $Visuals
 @onready var modular_visuals: ModularShipVisuals = $Visuals/ModularShipVisuals
@@ -60,46 +61,33 @@ func _physics_process(delta: float) -> void:
 	anchor_deployed = anchor_rig.is_deployed()
 	anchor_set = anchor_rig.is_set()
 	if anchor_deployed:
-		# The boat CONTINUES MOVING just after dropping the anchor. Its speed
-		# bleeds off gradually as the rope pays out, rather than freezing.
-		var drag: float = deceleration * (2.15 if anchor_set else 1.65)
+		# Continue coasting during the anchor throw; this is a heavy ship,
+		# not a motorboat with an instant stop button.
+		var drag: float = 0.95 if not anchor_set else 1.65
 		current_forward_speed = move_toward(current_forward_speed, 0.0, drag * delta)
 		velocity = -global_transform.basis.z * current_forward_speed
 		velocity.y = 0.0
-		if current_forward_speed > 0.02:
+		if current_forward_speed > 0.015:
 			move_and_slide()
-
 		if anchor_set:
-			var pivot: Vector3 = anchor_rig.get_pivot()
-			anchor_point = pivot
-			pivot.y = global_position.y
-			var relative: Vector3 = global_position - pivot
-			var reach: float = anchor_rig.get_rope_reach()
-			var horiz: float = Vector2(relative.x, relative.z).length()
-			if horiz > reach and horiz > 0.001:
-				# Hard stop only at full rope extension; the visual line still
-				# runs from the vessel to the anchored point.
-				global_position = pivot + relative * (reach / horiz)
-				current_forward_speed = minf(current_forward_speed, 0.15)
-			if sail_power > 0.05 and absf(smoothed_rudder) > 0.015:
-				# World-space orbit around the anchored point, NOT on-the-spot
-				# spin. This still works after the ship has coasted to a stop.
-				var turn_amount: float = -smoothed_rudder * turn_speed * 0.62 * sail_power * delta
-				var around: Vector3 = global_position - pivot
-				global_position = pivot + around.rotated(Vector3.UP, turn_amount)
-				rotation.y += turn_amount
+			_apply_anchor_tension(delta)
 	else:
+		_anchor_yaw_velocity = 0.0
 		var desired_speed: float = sail_power * max_speed * lerpf(1.0, travel_speed_multiplier, travel_blend)
 		current_forward_speed = move_toward(
 			current_forward_speed, desired_speed,
 			(acceleration if desired_speed > current_forward_speed else deceleration) * delta
 		)
-		if absf(current_forward_speed) > 0.1:
-			rotation.y -= smoothed_rudder * turn_speed * clampf(current_forward_speed / maxf(max_speed, 0.1), 0.15, 1.0) * delta
+		if current_forward_speed > 0.06:
+			rotation.y -= smoothed_rudder * turn_speed * clampf(
+				current_forward_speed / maxf(max_speed, 0.1), 0.12, 1.0) * delta
 		velocity = -global_transform.basis.z * current_forward_speed
 		velocity.y = 0.0
 		move_and_slide()
 
+	# Four separate wave samples apply buoyancy to the *boat*, not just to
+	# the animated water texture. Rope holder follows these visual motions.
+	_update_buoyancy(delta)
 	anchor_rig.update_anchor(delta)
 	anchor_deployed = anchor_rig.is_deployed()
 	anchor_set = anchor_rig.is_set()
@@ -107,9 +95,70 @@ func _physics_process(delta: float) -> void:
 		anchor_point = anchor_rig.get_pivot()
 	_update_travel(delta)
 	modular_visuals.animate_ship(delta, sail_level > 0, smoothed_rudder)
-	_wave_time += delta * 1.7
-	visuals.position.y = sin(_wave_time) * 0.08
-	visuals.rotation.z = sin(_wave_time * 1.1) * 0.024
+
+func _apply_anchor_tension(delta: float) -> void:
+	var pivot: Vector3 = anchor_rig.get_pivot()
+	anchor_point = pivot
+	var attachment: Vector3 = anchor_rig.get_attachment_position()
+	var direction: Vector3 = pivot - attachment
+	direction.y = 0.0
+	var separation: float = direction.length()
+	if separation < 0.001:
+		return
+	var reach: float = anchor_rig.get_rope_reach()
+	var tether_vector: Vector3 = direction / separation
+	var overstretch: float = maxf(0.0, separation - reach)
+
+	if overstretch > 0.0:
+		# Pull the front-right ATTACHMENT point toward the dropped anchor.
+		# Correction is rate-limited so the bow swings, not teleports.
+		var correction: float = minf(overstretch, (0.85 + overstretch * 2.8) * delta)
+		global_position += tether_vector * correction
+		current_forward_speed = move_toward(current_forward_speed, 0.0, 1.9 * delta)
+		var lever_arm: Vector3 = attachment - global_position
+		lever_arm.y = 0.0
+		# Torque around the vessel center depends on the side of the bow
+		# that carries the rope. No fake "rotate in place" anchored mode.
+		var y_torque: float = lever_arm.cross(tether_vector).y
+		_anchor_yaw_velocity += clampf(y_torque * overstretch * 2.4, -3.1, 3.1) * delta
+	elif sail_power > 0.1:
+		# A little wind fills any spare rope; the vessel then naturally
+		# pulls sideways at the bow as the tether becomes taut.
+		global_position += -global_transform.basis.z * sail_power * 0.46 * delta
+
+	# Helm input still influences the swing, without pulling the anchor
+	# itself along with the hull.
+	if sail_power > 0.05:
+		_anchor_yaw_velocity -= smoothed_rudder * 0.44 * sail_power * delta
+	_anchor_yaw_velocity = clampf(_anchor_yaw_velocity, -1.5, 1.5)
+	rotation.y += _anchor_yaw_velocity * delta
+	_anchor_yaw_velocity *= exp(-1.12 * delta)
+
+func _wave_at(local_point: Vector3) -> float:
+	var world: Node = get_parent()
+	if world and world.has_method("get_wave_height"):
+		return float(world.call("get_wave_height", to_global(local_point)))
+	# Fallback for headless player-only tests (without a world node).
+	return sin(_wave_time + local_point.x * 0.5 - local_point.z * 0.22) * 0.12
+
+func _update_buoyancy(delta: float) -> void:
+	_wave_time += delta * 0.55
+	var bow: float = _wave_at(Vector3(0.0, 0.0, -2.95))
+	var stern: float = _wave_at(Vector3(0.0, 0.0, 2.95))
+	var starboard: float = _wave_at(Vector3(1.7, 0.0, -0.5))
+	var port: float = _wave_at(Vector3(-1.7, 0.0, -0.5))
+	var surface: float = (bow + stern + starboard + port) * 0.25
+	var buoyancy_lerp: float = minf(1.0, delta * 4.0)
+	visuals.position.y = lerpf(visuals.position.y, surface + 0.18, buoyancy_lerp)
+	var pitch: float = clampf(atan2(bow - stern, 5.9) * 1.55, -0.18, 0.18)
+	var roll: float = clampf(atan2(starboard - port, 3.4) * 1.9, -0.21, 0.21)
+	visuals.rotation.x = lerp_angle(visuals.rotation.x, pitch, minf(1.0, delta * 3.0))
+	visuals.rotation.z = lerp_angle(visuals.rotation.z, roll, minf(1.0, delta * 3.0))
+	if not anchor_deployed and current_forward_speed < 0.8:
+		var world: Node = get_parent()
+		if world and world.has_method("get_wave_push"):
+			var drift: Vector2 = world.call("get_wave_push", global_position)
+			global_position += Vector3(drift.x, 0.0, drift.y) * delta
 
 func set_rudder_input(value: float) -> void:
 	rudder_input = clampf(value, -1.0, 1.0)
