@@ -49,14 +49,21 @@ func _ready() -> void:
 		# Place the topmost part of the imported mesh right at the rope
 		# attachment pivot. The model stays alongside the hull when stowed.
 		var model := _anchor.get_child(0) as Node3D
-		var mesh: MeshInstance3D = _find_mesh(model)
-		if mesh:
-			var bounds: AABB = mesh.get_aabb()
-			var factor: float = model.scale.y
-			model.position = Vector3(
-				-bounds.get_center().x * factor,
-				-bounds.end.y * factor,
-				-bounds.get_center().z * factor
+		var imported_mesh: MeshInstance3D = _find_mesh(model)
+		if imported_mesh:
+			# GLBs include an X-axis import rotation. A raw mesh AABB is
+			# NOT the visible scene AABB: measure transformed corners.
+			var raw_box: AABB = imported_mesh.get_aabb()
+			var minimum: Vector3 = Vector3(INF, INF, INF)
+			var maximum: Vector3 = Vector3(-INF, -INF, -INF)
+			for i in range(8):
+				var corner: Vector3 = _anchor.to_local(imported_mesh.to_global(raw_box.get_endpoint(i)))
+				minimum = minimum.min(corner)
+				maximum = maximum.max(corner)
+			model.position -= Vector3(
+				(minimum.x + maximum.x) * 0.5,
+				maximum.y,
+				(minimum.z + maximum.z) * 0.5
 			)
 
 	_rope = MeshInstance3D.new()
