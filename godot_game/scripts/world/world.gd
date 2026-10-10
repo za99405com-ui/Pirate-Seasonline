@@ -9,7 +9,7 @@ extends Node3D
 
 @export_group("World Time")
 @export var start_hour: float = 9.0
-@export var game_minutes_per_real_minute: float = 10.0
+@export var game_minutes_per_real_minute: float = 60.0
 
 var _minute_of_day: float = 540.0
 var _daylight: float = 0.86
@@ -85,7 +85,7 @@ func _process(delta: float) -> void:
 	# 24 in-game hours take 24 real minutes at the default setting.
 	_minute_of_day = fposmod(_minute_of_day + (game_minutes_per_real_minute / 60.0) * delta, 1440.0)
 	_lighting_refresh += delta
-	if _lighting_refresh >= 0.35:
+	if _lighting_refresh >= 1.0:
 		_lighting_refresh = 0.0
 		_update_daylight()
 
