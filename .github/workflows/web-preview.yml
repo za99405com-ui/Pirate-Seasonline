@@ -24,10 +24,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Level 1 3D ship
-        working-directory: godot_game
-        run: bash tools/fetch_level1_ship.sh
-
       - name: Download Godot 4.3 and export templates
         run: |
           GODOT_VERSION="4.3"

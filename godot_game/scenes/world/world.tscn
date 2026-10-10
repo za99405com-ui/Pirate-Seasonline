@@ -8,8 +8,8 @@
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
 sky_top_color = Color(0.12, 0.34, 0.66, 1)
 sky_horizon_color = Color(0.76, 0.88, 0.96, 1)
-ground_bottom_color = Color(0.06, 0.16, 0.28, 1)
-ground_horizon_color = Color(0.55, 0.76, 0.88, 1)
+ground_bottom_color = Color(0.22, 0.43, 0.54, 1)
+ground_horizon_color = Color(0.50, 0.72, 0.79, 1)
 sun_angle_max = 18.0
 sun_curve = 0.08
 
@@ -26,7 +26,7 @@ reflected_light_source = 2
 tonemap_mode = 2
 fog_enabled = true
 fog_light_color = Color(0.65, 0.82, 0.92, 1)
-fog_density = 0.0035
+fog_density = 0.0019
 fog_sky_affect = 0.42
 
 [sub_resource type="Shader" id="OceanShader"]
@@ -56,9 +56,9 @@ void fragment(){
 shader = SubResource("OceanShader")
 
 [sub_resource type="PlaneMesh" id="OceanMesh"]
-size = Vector2(520, 520)
-subdivide_width = 72
-subdivide_depth = 72
+size = Vector2(960, 960)
+subdivide_width = 170
+subdivide_depth = 170
 
 [sub_resource type="CylinderMesh" id="IslandSand"]
 top_radius = 18.0
@@ -133,9 +133,9 @@ roughness = 0.95
 
 [node name="World" type="Node3D"]
 script = ExtResource("1_world")
-camera_distance = 28.0
+camera_distance = 19.5
 camera_follow_speed = 5.0
-camera_fov = 58.0
+camera_fov = 55.0
 camera_orbit_sensitivity = 0.0062
 camera_min_pitch = 0.34
 camera_max_pitch = 0.78
@@ -146,7 +146,7 @@ environment = SubResource("Env")
 [node name="SunLight" type="DirectionalLight3D" parent="."]
 rotation = Vector3(-0.82, -0.58, 0)
 light_color = Color(1, 0.93, 0.78, 1)
-light_energy = 1.25
+light_energy = 1.15
 shadow_enabled = true
 directional_shadow_max_distance = 75.0
 

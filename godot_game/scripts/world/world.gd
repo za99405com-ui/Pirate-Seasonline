@@ -4,6 +4,20 @@ extends Node3D
 @onready var camera: Camera3D = $IsometricCamera
 @onready var hud: CanvasLayer = $HUD
 @onready var ocean: MeshInstance3D = $OceanPlane
+@onready var sun_light: DirectionalLight3D = $SunLight
+@onready var world_environment: WorldEnvironment = $WorldEnvironment
+
+@export_group("World Time")
+@export var start_hour: float = 9.0
+@export var game_minutes_per_real_minute: float = 60.0
+
+var _minute_of_day: float = 540.0
+var _daylight: float = 0.86
+var _lighting_refresh: float = 0.0
+var _ocean_shader: ShaderMaterial = null
+var _sea_time: float = 0.0
+var _wake: MeshInstance3D = null
+var _wake_material: ShaderMaterial = null
 
 @export_group("Sailing Camera")
 @export var camera_distance: float = 27.0
@@ -19,15 +33,15 @@ extends Node3D
 @export var camera_return_delay: float = 0.75
 
 @export_group("Travel Camera")
-@export var travel_camera_distance: float = 36.5
+@export var travel_camera_distance: float = 26.0
 @export var travel_camera_pitch: float = 0.56
-@export var travel_camera_fov: float = 64.0
+@export var travel_camera_fov: float = 57.0
 
 @export_group("Combat Awareness")
 @export var combat_enter_distance: float = 68.0
 @export var combat_exit_distance: float = 82.0
 @export var combat_exit_grace: float = 2.5
-@export var combat_camera_distance: float = 31.0
+@export var combat_camera_distance: float = 23.0
 @export var combat_camera_pitch: float = 0.57
 @export var combat_camera_fov: float = 62.0
 @export var combat_heading_assist: float = 0.22
@@ -48,6 +62,13 @@ var _combat_enemy: Node3D = null
 var _combat_clear_timer: float = 0.0
 
 func _ready() -> void:
+	_minute_of_day = fposmod(start_hour * 60.0, 1440.0)
+	if ocean:
+		_ocean_shader = ShaderMaterial.new()
+		_ocean_shader.shader = preload("res://shaders/ocean_water.gdshader")
+		ocean.material_override = _ocean_shader
+	_create_wake()
+	_update_daylight()
 	if hud and player_ship:
 		hud.set_player(player_ship)
 
@@ -63,6 +84,94 @@ func _ready() -> void:
 		camera.fov = camera_fov
 
 	_snap_camera()
+
+func _process(delta: float) -> void:
+	_sea_time += delta
+	if _ocean_shader:
+		_ocean_shader.set_shader_parameter("sea_time", _sea_time)
+	_update_wake()
+	# 24 in-game hours take 24 real minutes at the default setting.
+	_minute_of_day = fposmod(_minute_of_day + (game_minutes_per_real_minute / 60.0) * delta, 1440.0)
+	_lighting_refresh += delta
+	if _lighting_refresh >= 1.0:
+		_lighting_refresh = 0.0
+		_update_daylight()
+
+func _create_wake() -> void:
+	_wake = MeshInstance3D.new()
+	_wake.name = "ShipWake"
+	var wake_surface := PlaneMesh.new()
+	wake_surface.size = Vector2(6.0, 15.0)
+	wake_surface.subdivide_width = 22
+	wake_surface.subdivide_depth = 44
+	_wake.mesh = wake_surface
+	_wake.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_wake_material = ShaderMaterial.new()
+	_wake_material.shader = preload("res://shaders/ship_wake.gdshader")
+	_wake.material_override = _wake_material
+	add_child(_wake)
+	_wake.visible = false
+
+func _update_wake() -> void:
+	if not is_instance_valid(_wake) or not is_instance_valid(player_ship):
+		return
+	var current: float = float(player_ship.get("current_forward_speed"))
+	var speed_cap: float = maxf(0.01, float(player_ship.get("max_speed")))
+	var intensity: float = clampf(current / speed_cap, 0.0, 1.0)
+	_wake.visible = intensity > 0.14
+	if not _wake.visible:
+		return
+	# The boat stern points +Z; the wake stays horizontal, independently of
+	# the boat's heave/pitch, and its vertices follow physical sea waves.
+	_wake.global_position = player_ship.to_global(Vector3(0.0, 0.0, 10.5))
+	_wake.global_position.y = -0.073
+	_wake.rotation = Vector3(0.0, player_ship.global_rotation.y, 0.0)
+	_wake_material.set_shader_parameter("sea_time", _sea_time)
+	_wake_material.set_shader_parameter("ship_speed_ratio", intensity)
+
+func get_wave_height(at: Vector3) -> float:
+	# Exact same four wave phases and coefficients as ocean_water.gdshader.
+	# The hull samples this at bow/stern/port/starboard each physics frame.
+	var a: float = sin(at.x * 0.14 + at.z * 0.09 + _sea_time * 0.62)
+	var b: float = sin(-at.x * 0.10 + at.z * 0.19 - _sea_time * 0.47)
+	var s: float = sin(at.x * 0.24 - at.z * 0.06 + _sea_time * 0.88)
+	var d: float = sin(-at.x * 0.36 - at.z * 0.13 + _sea_time * 1.37)
+	return -0.12 + (0.52 * a + 0.33 * b + 0.15 * s) * 0.30 + d * 0.07
+
+func get_wave_push(at: Vector3) -> Vector2:
+	# Tiny swell/current: important while stationary, but not an ocean jet.
+	return Vector2(
+		sin(_sea_time * 0.41 + at.z * 0.12),
+		cos(_sea_time * 0.32 - at.x * 0.09)
+	) * 0.055
+
+func get_clock_text() -> String:
+	var total: int = int(floor(_minute_of_day))
+	return "%02d:%02d" % [total / 60, total % 60]
+
+func get_game_hour() -> float:
+	return _minute_of_day / 60.0
+
+func _update_daylight() -> void:
+	var hour: float = _minute_of_day / 60.0
+	var solar_elevation: float = sin((hour - 6.0) * PI / 12.0)
+	_daylight = smoothstep(-0.09, 0.55, solar_elevation)
+	var sun_factor: float = maxf(0.0, solar_elevation)
+	if sun_light:
+		sun_light.rotation = Vector3(-maxf(0.10, sun_factor * 1.24), -0.88 + (hour - 12.0) * 0.04, 0)
+		sun_light.light_energy = lerpf(0.015, 1.22, _daylight) * (0.75 + 0.25 * sun_factor)
+		sun_light.light_color = Color(1.0, 0.75, 0.55).lerp(Color(1.0, 0.95, 0.84), clampf(sun_factor * 1.3, 0.0, 1.0))
+	if world_environment and world_environment.environment:
+		var env: Environment = world_environment.environment
+		env.ambient_light_energy = lerpf(0.26, 0.85, _daylight)
+		env.fog_light_color = Color(0.09, 0.17, 0.27).lerp(Color(0.62, 0.78, 0.87), _daylight)
+		if env.sky and env.sky.sky_material is ProceduralSkyMaterial:
+			var sky_mat := env.sky.sky_material as ProceduralSkyMaterial
+			sky_mat.sky_top_color = Color(0.025, 0.044, 0.11).lerp(Color(0.13, 0.36, 0.62), _daylight)
+			sky_mat.sky_horizon_color = Color(0.09, 0.13, 0.22).lerp(Color(0.72, 0.82, 0.90), _daylight)
+			sky_mat.ground_horizon_color = Color(0.07, 0.13, 0.20).lerp(Color(0.53, 0.71, 0.82), _daylight)
+	if _ocean_shader:
+		_ocean_shader.set_shader_parameter("daylight", lerpf(0.18, 1.0, _daylight))
 
 func _physics_process(delta: float) -> void:
 	_update_combat_state(delta)

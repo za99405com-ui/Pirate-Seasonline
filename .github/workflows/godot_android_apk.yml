@@ -3,6 +3,8 @@ name: Build Godot 4 Android APK
 on:
   push:
     branches: [ main, master ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -14,10 +16,6 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
-      - name: Install Level 1 3D ship
-        working-directory: godot_game
-        run: bash tools/fetch_level1_ship.sh
 
       - name: Set up Java JDK 17
         uses: actions/setup-java@v4
