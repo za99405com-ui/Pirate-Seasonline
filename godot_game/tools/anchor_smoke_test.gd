@@ -92,5 +92,17 @@ func _smoke_test() -> void:
 			push_error("Missing supplied GLB asset: " + asset_path)
 			quit(1)
 			return
+	var base := world.get_node("PlayerShip/Visuals/ModularShipVisuals/BaseHull")
+	if base.get_child_count() != 1:
+		push_error("The real hull was not instanced: a placeholder is still in use.")
+		quit(1)
+		return
+	var live_rig := world.get_node("PlayerShip/AnchorRig") as AnchorRig
+	var holder_node := live_rig.get_node("StarboardAnchorHolder")
+	var anchor_node := live_rig.get_node("WorldAnchor")
+	if holder_node.get_child_count() != 1 or anchor_node.get_child_count() != 1:
+		push_error("Original anchor / holder GLB not instanced; fallback was used.")
+		quit(1)
+		return
 	print("PASS: Real assets, transparent icon-only anchor button, world, pivot motion, drop and raise.")
 	quit(0)
