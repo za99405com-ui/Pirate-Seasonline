@@ -26,7 +26,7 @@ reflected_light_source = 2
 tonemap_mode = 2
 fog_enabled = true
 fog_light_color = Color(0.65, 0.82, 0.92, 1)
-fog_density = 0.0035
+fog_density = 0.0019
 fog_sky_affect = 0.42
 
 [sub_resource type="Shader" id="OceanShader"]
@@ -56,9 +56,9 @@ void fragment(){
 shader = SubResource("OceanShader")
 
 [sub_resource type="PlaneMesh" id="OceanMesh"]
-size = Vector2(520, 520)
-subdivide_width = 72
-subdivide_depth = 72
+size = Vector2(420, 420)
+subdivide_width = 148
+subdivide_depth = 148
 
 [sub_resource type="CylinderMesh" id="IslandSand"]
 top_radius = 18.0
@@ -146,7 +146,7 @@ environment = SubResource("Env")
 [node name="SunLight" type="DirectionalLight3D" parent="."]
 rotation = Vector3(-0.82, -0.58, 0)
 light_color = Color(1, 0.93, 0.78, 1)
-light_energy = 1.25
+light_energy = 1.15
 shadow_enabled = true
 directional_shadow_max_distance = 75.0
 
