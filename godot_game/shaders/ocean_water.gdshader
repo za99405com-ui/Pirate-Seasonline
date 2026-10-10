@@ -1,48 +1,81 @@
 shader_type spatial;
 render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
 
-// Smooth stylised-realistic sea for Godot 4 mobile browsers.
-// Large crossing swells + very soft broken highlights: avoid repeating dots.
-uniform vec3 deep_color : source_color = vec3(0.016, 0.155, 0.255);
-uniform vec3 light_color : source_color = vec3(0.048, 0.295, 0.385);
-uniform float daylight : hint_range(0.0, 1.0) = 0.86;
-uniform float wave_height : hint_range(0.0, 0.5) = 0.30;
+// Ocean 2.0 — broad crossing swells, tiny ripples, broken foam, sun reflections.
+// Godot 4 mobile / WebGL compatible, no screen-space texture reads or particles.
+// Wave positions match get_wave_height() in scripts/world/world.gd.
+uniform vec3 deep_color : source_color = vec3(0.015, 0.10, 0.17);
+uniform vec3 surface_color : source_color = vec3(0.045, 0.24, 0.30);
+uniform vec3 sky_reflection : source_color = vec3(0.32, 0.57, 0.70);
+uniform float daylight : hint_range(0.0, 1.0) = 0.88;
 uniform float sea_time = 0.0;
-varying float wave_crest;
-varying vec2 sea_uv;
+uniform float swell_height : hint_range(0.0, 1.0) = 1.0;
 
-void vertex(){
-  vec2 p = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xz;
-  sea_uv = p;
-  float a = sin(dot(p, vec2(0.14, 0.09)) + sea_time * 0.62);
-  float b = sin(dot(p, vec2(-0.10, 0.19)) - sea_time * 0.47);
-  float c = sin(dot(p, vec2(0.24, -0.06)) + sea_time * 0.88);
-  wave_crest = 0.52*a + 0.33*b + 0.15*c;
-  VERTEX.y += wave_crest * wave_height;
-  float dx = (0.52*0.14*cos(dot(p,vec2(0.14,0.09))+sea_time*0.62)
-    + 0.33*(-0.10)*cos(dot(p,vec2(-0.10,0.19))-sea_time*0.47)
-    + 0.15*0.24*cos(dot(p,vec2(0.24,-0.06))+sea_time*0.88))*wave_height;
-  float dz = (0.52*0.09*cos(dot(p,vec2(0.14,0.09))+sea_time*0.62)
-    + 0.33*0.19*cos(dot(p,vec2(-0.10,0.19))-sea_time*0.47)
-    - 0.15*0.06*cos(dot(p,vec2(0.24,-0.06))+sea_time*0.88))*wave_height;
-  NORMAL = normalize(vec3(-dx,1.0,-dz));
+varying vec2 ocean_coord;
+varying float crest;
+varying float ocean_slope;
+varying vec3 ocean_world_position;
+
+void vertex() {
+	vec2 p = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xz;
+	ocean_coord = p;
+	float a = dot(p, vec2(0.14, 0.09)) + sea_time * 0.62;
+	float b = dot(p, vec2(-0.10, 0.19)) - sea_time * 0.47;
+	float c = dot(p, vec2(0.24, -0.06)) + sea_time * 0.88;
+	float d = dot(p, vec2(-0.36, -0.13)) + sea_time * 1.37;
+	float h = 0.30 * (0.52 * sin(a) + 0.33 * sin(b) + 0.15 * sin(c))
+			+ 0.07 * sin(d);
+	VERTEX.y += h * swell_height;
+	crest = h;
+	float ddx = 0.30 * (
+		0.52 * 0.14 * cos(a)
+		- 0.33 * 0.10 * cos(b)
+		+ 0.15 * 0.24 * cos(c)
+	) + 0.07 * -0.36 * cos(d);
+	float ddz = 0.30 * (
+		0.52 * 0.09 * cos(a)
+		+ 0.33 * 0.19 * cos(b)
+		- 0.15 * 0.06 * cos(c)
+	) + 0.07 * -0.13 * cos(d);
+	NORMAL = normalize(vec3(-ddx * swell_height, 1.0, -ddz * swell_height));
+	ocean_slope = length(vec2(ddx, ddz));
+	ocean_world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 
-void fragment(){
-  // Mild wave streaks, not bright repeating circular patches.
-  float flow = sin(sea_uv.x*0.36 + sea_uv.y*0.19 + sea_time*0.7
-      + sin(sea_uv.y*0.11 - sea_time*0.26)*0.9);
-  float flow2 = sin(sea_uv.x*(-0.21) + sea_uv.y*0.27 - sea_time*0.42);
-  float shimmer = smoothstep(0.74,1.50,flow*0.67+flow2*0.33);
-  float tint = clamp(0.50 + wave_crest*0.16 + flow*0.022, 0.1,0.9);
-  float crest_foam = smoothstep(0.73, 0.99, wave_crest) * (0.07 + 0.05 * flow2);
-  float view_fresnel = pow(1.0-clamp(dot(normalize(NORMAL),normalize(VIEW)),0.0,1.0),3.0);
-  vec3 col = mix(deep_color,light_color,tint);
-  col *= mix(0.19,1.0,daylight);
-  ALBEDO = col + vec3(0.023,0.037,0.042)*shimmer*daylight
-              + vec3(0.035,0.055,0.060)*view_fresnel*daylight
-              + vec3(0.28,0.38,0.42)*crest_foam*daylight;
-  ROUGHNESS=0.34;
-  SPECULAR=0.42;
-  METALLIC=0.01;
+void fragment() {
+	vec2 p = ocean_coord;
+	// Short irregular capillary ripples, domain-warped to avoid dot patterns.
+	float warp = sin(p.x * 0.45 - p.y * 0.24 + sea_time * 0.28) * 0.47;
+	float r1 = sin((p.x + warp) * 1.12 + p.y * 0.83 - sea_time * 1.95);
+	float r2 = sin((p.y - warp) * 1.48 - p.x * 0.51 + sea_time * 1.52);
+	float r3 = sin(p.x * 0.72 - p.y * 1.27 - sea_time * 1.18);
+	vec2 ripples = vec2(
+		1.12 * cos((p.x + warp) * 1.12 + p.y * 0.83 - sea_time * 1.95) +
+		-0.51 * cos((p.y - warp) * 1.48 - p.x * 0.51 + sea_time * 1.52),
+		0.83 * cos((p.x + warp) * 1.12 + p.y * 0.83 - sea_time * 1.95) +
+		1.48 * cos((p.y - warp) * 1.48 - p.x * 0.51 + sea_time * 1.52)
+	);
+	// Perturb the already-correct large-swell normal in view space.
+	vec3 micro_normal = (VIEW_MATRIX * vec4(vec3(ripples.x, 0.0, ripples.y), 0.0)).xyz;
+	NORMAL = normalize(NORMAL - micro_normal * 0.085);
+
+	float ndotv = clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0);
+	float fresnel = 0.026 + 0.974 * pow(1.0 - ndotv, 5.0);
+	float rolling = clamp(0.5 + crest * 0.75 + (r1 + r2 + r3) * 0.017, 0.0, 1.0);
+	vec3 sea = mix(deep_color, surface_color, rolling);
+	float sky_mix = clamp(fresnel * 0.53, 0.0, 0.62);
+	sea = mix(sea, sky_reflection, sky_mix);
+	// Sparse pale foam on breaking crests, not tiled white spots.
+	float foam_mask = smoothstep(0.24, 0.35, crest)
+		* smoothstep(0.12, 0.25, ocean_slope + 0.02 * r2);
+	float foam_breakup = smoothstep(-0.35, 0.42, r1 * 0.46 + r2 * 0.36 + r3 * 0.18);
+	sea = mix(sea, vec3(0.60, 0.78, 0.80), foam_mask * foam_breakup * 0.33);
+	// In distance sea gets a light blue atmospheric wash, softening the horizon.
+	float dist = distance(CAMERA_POSITION_WORLD, ocean_world_position);
+	float haze = smoothstep(130.0, 440.0, dist) * 0.43;
+	sea = mix(sea, vec3(0.29, 0.48, 0.57), haze);
+	ALBEDO = sea * mix(0.19, 1.03, daylight);
+	ROUGHNESS = clamp(0.19 + 0.055 * r1 + 0.035 * r2, 0.12, 0.34);
+	SPECULAR = 0.83;
+	METALLIC = 0.0;
 }
